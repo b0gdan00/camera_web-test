@@ -1,40 +1,52 @@
 #!/bin/bash
-# ── PiCam Stream — start everything ──────────────
-# Starts Flask app (with camera) + ngrok tunnel
+# ── PiCam Stream — startup script ────────────────
+# Called by systemd on boot. Updates code, then starts everything.
 
 set -e
 
-echo "🎥 Starting PiCam Stream..."
+PROJECT_DIR="/home/rp/camera_web-test-1"
+VENV_DIR="$PROJECT_DIR/venv"
+LOG_TAG="picam-startup"
 
-# 1. Install Python deps if needed
-if ! python3 -c "import flask" 2>/dev/null; then
-    echo "📦 Installing Python dependencies..."
-    pip3 install -r requirements.txt
-fi
+log() {
+    echo "[$(date '+%H:%M:%S')] $1"
+    logger -t "$LOG_TAG" "$1"
+}
 
-# 2. Start ngrok in Docker
-echo "🌐 Starting ngrok tunnel..."
-docker compose up -d
+cd "$PROJECT_DIR"
 
-# 3. Start Flask app in background
-echo "🚀 Starting camera server on port 5000..."
-python3 app.py &
-APP_PID=$!
+# ── 1. Wait for network ──────────────────────────
+log "Waiting for network..."
+for i in $(seq 1 30); do
+    if ping -c1 -W2 github.com &>/dev/null; then
+        log "Network is up"
+        break
+    fi
+    sleep 2
+done
 
-# Wait for ngrok to be ready, then show URL
-sleep 8
-echo ""
-echo "======================================================="
-NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | python3 -c "import sys,json; tunnels=json.load(sys.stdin).get('tunnels',[]); [print(t['public_url']) for t in tunnels if t.get('public_url','').startswith('https://')]" 2>/dev/null || echo "")
-if [ -n "$NGROK_URL" ]; then
-    echo "  🚀 SITE IS LIVE AT: $NGROK_URL"
+# ── 2. Git pull ──────────────────────────────────
+log "Pulling latest code from git..."
+if git pull --ff-only 2>&1; then
+    log "Git pull successful"
 else
-    echo "  ⚠ Could not get ngrok URL. Check http://localhost:4040"
+    log "Git pull failed (continuing with current version)"
 fi
-echo "======================================================="
-echo ""
-echo "Press Ctrl+C to stop"
 
-# Wait for app to finish (or Ctrl+C)
-trap "echo '🛑 Stopping...'; kill $APP_PID 2>/dev/null; docker compose down; exit 0" SIGINT SIGTERM
-wait $APP_PID
+# ── 3. Install/update Python deps ────────────────
+if [ ! -d "$VENV_DIR" ]; then
+    log "Creating venv..."
+    python3 -m venv --system-site-packages "$VENV_DIR"
+fi
+
+source "$VENV_DIR/bin/activate"
+log "Installing Python dependencies..."
+pip install --quiet -r requirements.txt 2>&1 || log "pip install had warnings"
+
+# ── 4. Start ngrok via Docker ────────────────────
+log "Starting ngrok tunnel..."
+docker compose up -d 2>&1 || log "Docker compose failed"
+
+# ── 5. Start Flask app ───────────────────────────
+log "Starting PiCam Stream server..."
+exec python3 app.py

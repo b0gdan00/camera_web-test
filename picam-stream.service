@@ -1,0 +1,26 @@
+[Unit]
+Description=PiCam Stream — Camera + Ngrok
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=rp
+Group=rp
+WorkingDirectory=/home/rp/camera_web-test-1
+ExecStart=/bin/bash /home/rp/camera_web-test-1/start.sh
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Give time for git pull + pip install
+TimeoutStartSec=120
+
+# Environment
+Environment=PATH=/home/rp/camera_web-test-1/venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
