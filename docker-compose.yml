@@ -1,29 +1,12 @@
 services:
-  # ── Flask + Camera ─────────────────────────────
-  picam:
-    build: .
-    container_name: picam-stream
-    restart: unless-stopped
-    privileged: true
-    ports:
-      - "5000:5000"
-    volumes:
-      - /run/udev:/run/udev:ro
-      - /dev:/dev
-    environment:
-      - PYTHONUNBUFFERED=1
-
-  # ── Ngrok Tunnel ───────────────────────────────
+  # ── Ngrok Tunnel (connects to Flask running on host) ──
   ngrok:
     image: ngrok/ngrok:latest
     container_name: picam-ngrok
     restart: unless-stopped
-    ports:
-      - "4040:4040"
-    command:
-      - "http"
-      - "picam:5000"
+    network_mode: host
     environment:
       - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
-    depends_on:
-      - picam
+    command:
+      - "http"
+      - "http://localhost:5000"
