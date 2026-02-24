@@ -21,6 +21,7 @@ import logging
 import os
 import threading
 import time
+import requests
 from collections import deque
 from flask import Flask, Response, render_template, jsonify, request
 
@@ -324,6 +325,29 @@ def system_stats():
     return jsonify(stats)
 
 
+def _discover_ngrok_url():
+    """Try to find the public ngrok URL and log it."""
+    time.sleep(5)  # Let ngrok start up
+    for _ in range(12):  # Try for 1 minute
+        try:
+            # We try to reach ngrok container via its network name
+            response = requests.get("http://ngrok:4040/api/tunnels", timeout=2)
+            if response.status_code == 200:
+                data = response.json()
+                tunnels = data.get("tunnels", [])
+                for tunnel in tunnels:
+                    if tunnel.get("proto") == "https":
+                        url = tunnel.get("public_url")
+                        log.info("\n" + "="*50 + f"\n🚀 SITE IS LIVE AT: {url}\n" + "="*50)
+                        return
+        except Exception:
+            pass
+        time.sleep(5)
+    log.warning("Could not automatically find ngrok URL. Check http://localhost:4040 manually.")
+
+
 if __name__ == "__main__":
     log.info("Starting PiCam Stream server on port 5000")
+    # Start URL discovery in background
+    threading.Thread(target=_discover_ngrok_url, daemon=True).start()
     app.run(host="0.0.0.0", port=5000, threaded=True, debug=False)
