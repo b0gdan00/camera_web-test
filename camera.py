@@ -23,8 +23,10 @@ try:
         from picamera2 import Picamera2  # type: ignore
         _USE_PICAMERA2 = True
         log.info("Picamera2 found — will use native Pi camera")
-except ImportError:
-    log.info("Picamera2 not available — will use OpenCV")
+except ImportError as e:
+    log.warning("Picamera2 import failed: %s", e)
+    log.warning("If on Pi, try: python3 -m venv --system-site-packages venv")
+    log.info("Falling back to OpenCV")
 
 
 class Camera:

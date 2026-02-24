@@ -9,4 +9,5 @@ services:
       - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
     command:
       - "http"
+      - "--url=${NGROK_DOMAIN}"
       - "http://localhost:5000"
