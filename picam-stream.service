@@ -1,8 +1,7 @@
 [Unit]
-Description=PiCam Stream — Camera + Ngrok
-After=network-online.target docker.service
+Description=PiCam Stream — Live Camera
+After=network-online.target
 Wants=network-online.target
-Requires=docker.service
 
 [Service]
 Type=simple
@@ -19,7 +18,6 @@ StandardError=journal
 TimeoutStartSec=120
 
 # Environment
-Environment=PATH=/home/rp/camera_web-test-1/venv/bin:/usr/local/bin:/usr/bin:/bin
 Environment=PYTHONUNBUFFERED=1
 
 [Install]

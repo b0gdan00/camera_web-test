@@ -302,6 +302,42 @@ header {
   gap: 4px;
 }
 
+/* Collapsible panel title as button */
+.panel-title-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.2s;
+  font-family: inherit;
+}
+.panel-title-btn:hover {
+  color: var(--text);
+}
+.collapse-icon {
+  width: 18px;
+  height: 18px;
+  fill: var(--text-dim);
+  transition: transform 0.3s;
+  flex-shrink: 0;
+}
+.collapse-icon.rotated {
+  transform: rotate(180deg);
+}
+
+/* Collapsible panel body */
+.collapsible-panel {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.3s;
+  opacity: 0;
+}
+.collapsible-panel.open {
+  max-height: 200px;
+  opacity: 1;
+}
+
 .panel {
   background: var(--surface2);
   border: 1px solid var(--border);
@@ -364,33 +400,6 @@ input[type="range"]::-moz-range-thumb {
   cursor: pointer;
   box-shadow: 0 0 8px rgba(108, 138, 255, 0.4);
   border: 2px solid var(--surface);
-}
-
-/* ── Info cards ───────────────────────────────── */
-.info-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-.info-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 10px 12px;
-  min-width: 0;
-}
-.info-card .lbl {
-  font-size: 0.65rem;
-  font-weight: 600;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.info-card .val {
-  font-size: 0.95rem;
-  font-weight: 700;
-  margin-top: 2px;
-  word-break: break-all;
 }
 
 /* ── Footer ──────────────────────────────────── */
@@ -1056,11 +1065,6 @@ footer {
   .sidebar {
     padding: 14px;
     gap: 14px;
-  }
-
-  .info-grid {
-    grid-template-columns: 1fr 1fr;
-    gap: 6px;
   }
 
   .log-body {

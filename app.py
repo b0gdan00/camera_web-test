@@ -1,5 +1,5 @@
 """
-Flask application -- live camera stream with quality/FPS controls.
+Flask application — live camera stream with quality/FPS controls.
 
 Routes
 ------
@@ -18,11 +18,8 @@ Routes
 
 import atexit
 import logging
-import os
 import threading
 import time
-import json
-import urllib.request
 from collections import deque
 from flask import Flask, Response, render_template, jsonify, request
 
@@ -34,8 +31,10 @@ except ImportError:
 
 from camera import Camera
 
-# ── In-memory log buffer ──────────────────────────────────────────
+# ── In-memory log buffer ─────────────────────────────────────────
+
 MAX_LOG_LINES = 500
+
 
 class _LogBuffer(logging.Handler):
     """Captures log records into a thread-safe deque."""
@@ -73,7 +72,8 @@ logging.root.setLevel(logging.INFO)
 
 log = logging.getLogger("app")
 
-# ── Viewers tracker ───────────────────────────────────────────────
+# ── Viewers tracker ──────────────────────────────────────────────
+
 VIEWER_TIMEOUT = 30  # seconds without heartbeat -> remove
 
 _viewers: dict[str, float] = {}  # name -> last_seen timestamp
@@ -104,7 +104,6 @@ def _remove_viewer(name: str) -> None:
 def _get_viewers() -> list[str]:
     now = time.time()
     with _viewers_lock:
-        # Clean up stale viewers
         stale = [n for n, t in _viewers.items() if now - t > VIEWER_TIMEOUT]
         for n in stale:
             del _viewers[n]
@@ -112,21 +111,15 @@ def _get_viewers() -> list[str]:
         return sorted(_viewers.keys())
 
 
-# ── Camera ────────────────────────────────────────────────────────
-CAMERA_SRC   = 0
+# ── Camera ───────────────────────────────────────────────────────
+
+CAMERA_SRC = 0
 CAMERA_WIDTH = 640
 CAMERA_HEIGHT = 480
-CAMERA_FPS   = 30
+CAMERA_FPS = 30
 JPEG_QUALITY = 80
 
 app = Flask(__name__)
-
-
-@app.after_request
-def add_ngrok_headers(response):
-    """Help bypass ngrok browser warning for all responses."""
-    response.headers["ngrok-skip-browser-warning"] = "true"
-    return response
 
 camera = Camera(
     src=CAMERA_SRC,
@@ -171,7 +164,7 @@ def snapshot():
     return Response(frame, mimetype="image/jpeg")
 
 
-# ── Camera Settings API ──────────────────────────────────────────
+# ── Camera Settings API ─────────────────────────────────────────
 
 @app.route("/api/settings", methods=["GET"])
 def get_settings():
@@ -190,7 +183,7 @@ def update_settings():
     return jsonify(camera.get_settings())
 
 
-# ── Logs API ─────────────────────────────────────────────────────
+# ── Logs API ────────────────────────────────────────────────────
 
 @app.route("/api/logs", methods=["GET"])
 def get_logs():
@@ -201,7 +194,7 @@ def get_logs():
     return jsonify({"lines": lines, "total": _log_buffer.count()})
 
 
-# ── Detection API ────────────────────────────────────────────────
+# ── Detection API ───────────────────────────────────────────────
 
 @app.route("/api/detection", methods=["GET"])
 def get_detection():
@@ -229,11 +222,10 @@ def update_detection():
     return jsonify(settings)
 
 
-# ── Viewers API ──────────────────────────────────────────────────
+# ── Viewers API ─────────────────────────────────────────────────
 
 @app.route("/api/join", methods=["POST"])
 def join_viewer():
-    """Join as a viewer. Body: {"name": "..."}"""
     data = request.get_json(force=True)
     name = str(data.get("name", "")).strip()
     if not name or len(name) > 30:
@@ -244,7 +236,6 @@ def join_viewer():
 
 @app.route("/api/heartbeat", methods=["POST"])
 def heartbeat():
-    """Keep viewer alive. Body: {"name": "..."}"""
     data = request.get_json(force=True)
     name = str(data.get("name", "")).strip()
     if name:
@@ -254,13 +245,11 @@ def heartbeat():
 
 @app.route("/api/viewers", methods=["GET"])
 def get_viewers():
-    """Get list of current viewers."""
     return jsonify({"viewers": _get_viewers()})
 
 
 @app.route("/api/leave", methods=["POST"])
 def leave_viewer():
-    """Remove viewer. Body: {"name": "..."}"""
     data = request.get_json(force=True)
     name = str(data.get("name", "")).strip()
     if name:
@@ -268,10 +257,9 @@ def leave_viewer():
     return jsonify({"ok": True, "viewers": _get_viewers()})
 
 
-# ── System Stats ─────────────────────────────────────────────────
+# ── System Stats ────────────────────────────────────────────────
 
 def _get_cpu_temp() -> float | None:
-    """Read CPU temperature (Raspberry Pi)."""
     try:
         with open("/sys/class/thermal/thermal_zone0/temp") as f:
             return round(int(f.read().strip()) / 1000, 1)
@@ -287,7 +275,6 @@ def _get_cpu_temp() -> float | None:
 
 
 def _get_uptime() -> str:
-    """Human-readable uptime."""
     try:
         with open("/proc/uptime") as f:
             secs = int(float(f.read().split()[0]))
@@ -300,15 +287,16 @@ def _get_uptime() -> str:
     hours, rem = divmod(rem, 3600)
     mins, _ = divmod(rem, 60)
     parts = []
-    if days:  parts.append(f"{days}d")
-    if hours: parts.append(f"{hours}h")
+    if days:
+        parts.append(f"{days}d")
+    if hours:
+        parts.append(f"{hours}h")
     parts.append(f"{mins}m")
     return " ".join(parts)
 
 
 @app.route("/api/stats", methods=["GET"])
 def system_stats():
-    """Return system resource usage."""
     stats = {
         "cpu_percent": None,
         "ram_percent": None,
@@ -333,31 +321,6 @@ def system_stats():
     return jsonify(stats)
 
 
-def _discover_ngrok_url():
-    """Try to find the public ngrok URL and log it."""
-    time.sleep(5)  # Let ngrok start up
-    for attempt in range(12):  # Try for 1 minute
-        try:
-            req = urllib.request.urlopen("http://localhost:4040/api/tunnels", timeout=3)
-            data = json.loads(req.read().decode())
-            tunnels = data.get("tunnels", [])
-            for tunnel in tunnels:
-                url = tunnel.get("public_url", "")
-                if url.startswith("https://"):
-                    log.info("")
-                    log.info("=" * 55)
-                    log.info("  🚀 SITE IS LIVE AT: %s", url)
-                    log.info("=" * 55)
-                    log.info("")
-                    return
-        except Exception:
-            pass
-        time.sleep(5)
-    log.warning("Could not find ngrok URL. Check http://localhost:4040 manually.")
-
-
 if __name__ == "__main__":
     log.info("Starting PiCam Stream server on port 5000")
-    # Start URL discovery in background
-    threading.Thread(target=_discover_ngrok_url, daemon=True).start()
     app.run(host="0.0.0.0", port=5000, threaded=True, debug=False)

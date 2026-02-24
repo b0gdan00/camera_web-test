@@ -1,21 +1,4 @@
 // ══════════════════════════════════════════════════
-//  Ngrok: skip browser warning on free plan
-// ══════════════════════════════════════════════════
-(function() {
-    var originalFetch = window.fetch;
-    window.fetch = function(url, options) {
-        options = options || {};
-        options.headers = options.headers || {};
-        if (options.headers instanceof Headers) {
-            options.headers.set('ngrok-skip-browser-warning', 'true');
-        } else {
-            options.headers['ngrok-skip-browser-warning'] = 'true';
-        }
-        return originalFetch.call(this, url, options);
-    };
-})();
-
-// ══════════════════════════════════════════════════
 //  Auth / Viewers
 // ══════════════════════════════════════════════════
 var viewerName = sessionStorage.getItem('viewerName') || '';
@@ -133,7 +116,7 @@ if (viewerName) {
 // ══════════════════════════════════════════════════
 function updateClock() {
     document.getElementById('clock').textContent =
-        new Date().toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+        new Date().toLocaleTimeString('uk-UA', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
 }
 updateClock();
 setInterval(updateClock, 1000);
@@ -144,14 +127,11 @@ setInterval(updateClock, 1000);
 var streamImg  = document.getElementById('stream');
 var badge      = document.getElementById('statusBadge');
 var statusText = document.getElementById('statusText');
-var statusCard = document.getElementById('streamStatus');
 var errorOvl   = document.getElementById('errorOverlay');
 
 function setOnline(on) {
     badge.classList.toggle('offline', !on);
     statusText.textContent = on ? 'Connected' : 'Disconnected';
-    statusCard.textContent = on ? 'Online' : 'Offline';
-    statusCard.style.color = on ? 'var(--green)' : 'var(--red)';
     errorOvl.classList.toggle('visible', !on);
 }
 
@@ -192,8 +172,16 @@ function syncUI(s) {
 fetch('/api/settings').then(function(r) { return r.json(); }).then(syncUI).catch(function() {});
 
 // ══════════════════════════════════════════════════
-//  Rotation
+//  Rotation (collapsible)
 // ══════════════════════════════════════════════════
+var rotationOpen = false;
+
+function toggleRotationPanel() {
+    rotationOpen = !rotationOpen;
+    document.getElementById('rotationPanel').classList.toggle('open', rotationOpen);
+    document.getElementById('rotCollapseIcon').classList.toggle('rotated', rotationOpen);
+}
+
 function setRotation(deg) {
     updateSetting('rotation', deg);
     document.querySelectorAll('.rot-btn').forEach(function(btn) {

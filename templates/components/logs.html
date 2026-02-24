@@ -1,0 +1,16 @@
+<div class="log-panel" id="logPanel">
+    <div class="log-header" onclick="toggleLogPanel()">
+        <div class="log-header-left">
+            <svg class="log-toggle-icon" viewBox="0 0 24 24"><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg>
+            <span class="log-header-title">Server Logs</span>
+            <span class="log-count" id="logCount">0</span>
+        </div>
+        <div class="log-controls">
+            <button class="log-btn active" id="autoScrollBtn" onclick="event.stopPropagation(); toggleAutoScroll()">Auto-scroll</button>
+            <button class="log-btn" onclick="event.stopPropagation(); clearLogs()">Clear</button>
+        </div>
+    </div>
+    <div class="log-body" id="logBody">
+        <div class="log-empty">Waiting for server logs...</div>
+    </div>
+</div>

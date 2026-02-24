@@ -1,6 +1,6 @@
 #!/bin/bash
 # ── PiCam Stream — startup script ────────────────
-# Called by systemd on boot. Updates code, then starts everything.
+# Called by systemd on boot. Updates code, then starts the Flask server.
 
 set -e
 
@@ -43,10 +43,6 @@ source "$VENV_DIR/bin/activate"
 log "Installing Python dependencies..."
 pip install --quiet -r requirements.txt 2>&1 || log "pip install had warnings"
 
-# ── 4. Start ngrok via Docker ────────────────────
-log "Starting ngrok tunnel..."
-docker compose up -d 2>&1 || log "Docker compose failed"
-
-# ── 5. Start Flask app ───────────────────────────
-log "Starting PiCam Stream server..."
+# ── 4. Start Flask app ───────────────────────────
+log "Starting PiCam Stream on http://0.0.0.0:5000"
 exec python3 app.py

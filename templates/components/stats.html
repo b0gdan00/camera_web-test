@@ -1,0 +1,35 @@
+<div class="stats-panel" id="statsPanel">
+    <div class="stats-header" onclick="toggleStatsPanel()">
+        <div class="stats-header-left">
+            <svg class="stats-toggle-icon" viewBox="0 0 24 24"><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg>
+            <span class="stats-header-title">System Resources</span>
+        </div>
+    </div>
+    <div class="stats-body" id="statsBody">
+        <div class="stat-card">
+            <div class="stat-label">CPU Usage</div>
+            <div class="stat-value" id="statCpu">—</div>
+            <div class="stat-bar"><div class="stat-bar-fill green" id="statCpuBar" style="width:0%"></div></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">RAM Usage</div>
+            <div class="stat-value" id="statRam">—</div>
+            <div class="stat-sub" id="statRamSub"></div>
+            <div class="stat-bar"><div class="stat-bar-fill green" id="statRamBar" style="width:0%"></div></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Disk Usage</div>
+            <div class="stat-value" id="statDisk">—</div>
+            <div class="stat-sub" id="statDiskSub"></div>
+            <div class="stat-bar"><div class="stat-bar-fill green" id="statDiskBar" style="width:0%"></div></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">CPU Temperature</div>
+            <div class="stat-value" id="statTemp">—</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Uptime</div>
+            <div class="stat-value" id="statUptime">—</div>
+        </div>
+    </div>
+</div>
