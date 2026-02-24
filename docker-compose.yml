@@ -18,6 +18,8 @@ services:
     image: ngrok/ngrok:latest
     container_name: picam-ngrok
     restart: unless-stopped
+    ports:
+      - "4040:4040"
     command:
       - "http"
       - "picam:5000"
