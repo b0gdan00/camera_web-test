@@ -1,0 +1,23 @@
+services:
+  # ── Flask + Camera ─────────────────────────────
+  picam:
+    build: .
+    container_name: picam-stream
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    devices:
+      - /dev/video0:/dev/video0
+    volumes:
+      - /run/udev:/run/udev:ro  # for camera detection
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  # ── Cloudflare Tunnel ──────────────────────────
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: picam-tunnel
+    restart: unless-stopped
+    depends_on:
+      - picam
+    command: tunnel --no-autoupdate --url http://picam:5000
