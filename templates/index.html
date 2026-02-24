@@ -193,6 +193,81 @@
             text-align: center; border-top: 1px solid var(--border);
             grid-column: 1 / -1;
         }
+
+        /* ── Log Panel ───────────────────────────────── */
+        .log-panel {
+            position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+            transform: translateY(100%);
+            transition: transform .35s cubic-bezier(.4,0,.2,1);
+        }
+        .log-panel.open { transform: translateY(0); }
+
+        .log-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #1a1e2a 0%, #13161f 100%);
+            border-top: 1px solid var(--border);
+            cursor: pointer; user-select: none;
+        }
+        .log-header:hover { background: #1e2233; }
+        .log-header-left { display: flex; align-items: center; gap: 8px; }
+        .log-header-title {
+            font-size: .78rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: .06em; color: var(--text-dim);
+        }
+        .log-count {
+            font-size: .65rem; font-weight: 600;
+            background: rgba(108,138,255,.15); color: var(--accent);
+            padding: 2px 8px; border-radius: 999px;
+        }
+        .log-toggle-icon {
+            width: 20px; height: 20px; fill: var(--text-dim);
+            transition: transform .3s;
+        }
+        .log-panel.open .log-toggle-icon { transform: rotate(180deg); }
+
+        .log-body {
+            height: 220px;
+            overflow-y: auto; overflow-x: hidden;
+            background: #0a0c10;
+            padding: 8px 16px;
+            font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+            font-size: .72rem; line-height: 1.6;
+        }
+        .log-body::-webkit-scrollbar { width: 6px; }
+        .log-body::-webkit-scrollbar-track { background: transparent; }
+        .log-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        .log-line {
+            white-space: pre-wrap; word-break: break-all;
+            padding: 1px 0; color: #8b93a8;
+            border-left: 2px solid transparent; padding-left: 8px;
+            transition: background .15s;
+        }
+        .log-line:hover { background: rgba(255,255,255,.03); }
+        .log-line.lvl-error { color: #ff6b82; border-left-color: #ff4d6a; }
+        .log-line.lvl-warning { color: #f0b040; border-left-color: #f0b040; }
+        .log-line.lvl-info { color: #7ec8e3; border-left-color: #6c8aff; }
+        .log-line.new-line { animation: logFlash .6s ease-out; }
+        @keyframes logFlash { from { background: rgba(108,138,255,.12); } to { background: transparent; } }
+
+        .log-empty {
+            color: var(--text-dim); font-style: italic;
+            padding: 40px 0; text-align: center;
+        }
+
+        .log-controls {
+            display: flex; gap: 6px; align-items: center;
+        }
+        .log-btn {
+            font-family: inherit; font-size: .68rem; font-weight: 600;
+            background: var(--surface2); color: var(--text-dim);
+            border: 1px solid var(--border); border-radius: 6px;
+            padding: 4px 10px; cursor: pointer;
+            transition: background .2s, color .2s;
+        }
+        .log-btn:hover { background: var(--border); color: var(--text); }
+        .log-btn.active { background: rgba(108,138,255,.15); color: var(--accent); border-color: rgba(108,138,255,.3); }
     </style>
 </head>
 <body>
@@ -230,7 +305,11 @@
             </button>
             <button class="btn btn-ghost" onclick="toggleFullscreen()">
                 <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
-                Полный экран
+                Full screen
+            </button>
+            <button class="btn btn-ghost" onclick="toggleLogPanel()" id="logToggleBtn">
+                <svg viewBox="0 0 24 24"><path d="M20 6h-1v8c0 .55-.45 1-1 1H6v1c0 1.1.9 2 2 2h10l4 4V8c0-1.1-.9-2-2-2zm-3 5V4c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v13l4-4h9c1.1 0 2-.9 2-2z"/></svg>
+                Server Logs
             </button>
         </div>
     </div>
@@ -289,6 +368,24 @@
     <footer>PiCam Stream &middot; Raspberry Pi &middot; Flask + OpenCV</footer>
 </div>
 
+<!-- ── Server Log Panel ───────────────────────── -->
+<div class="log-panel" id="logPanel">
+    <div class="log-header" onclick="toggleLogPanel()">
+        <div class="log-header-left">
+            <svg class="log-toggle-icon" viewBox="0 0 24 24"><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg>
+            <span class="log-header-title">Server Logs</span>
+            <span class="log-count" id="logCount">0</span>
+        </div>
+        <div class="log-controls">
+            <button class="log-btn active" id="autoScrollBtn" onclick="event.stopPropagation(); toggleAutoScroll()">Auto-scroll</button>
+            <button class="log-btn" onclick="event.stopPropagation(); clearLogs()">Clear</button>
+        </div>
+    </div>
+    <div class="log-body" id="logBody">
+        <div class="log-empty">Waiting for server logs...</div>
+    </div>
+</div>
+
 <script>
     // ── Clock
     function updateClock() {
@@ -307,7 +404,7 @@
 
     function setOnline(on) {
         badge.classList.toggle('offline', !on);
-        statusText.textContent = on ? 'Подключено' : 'Отключено';
+        statusText.textContent = on ? 'Connected' : 'Disconnected';
         statusCard.textContent = on ? 'Online' : 'Offline';
         statusCard.style.color = on ? 'var(--green)' : 'var(--red)';
         errorOvl.classList.toggle('visible', !on);
@@ -349,6 +446,118 @@
         if (!document.fullscreenElement) el.requestFullscreen().catch(() => {});
         else document.exitFullscreen();
     }
+
+    // ── Server Logs ──────────────────────────────────
+    const logPanel    = document.getElementById('logPanel');
+    const logBody     = document.getElementById('logBody');
+    const logCountEl  = document.getElementById('logCount');
+    const autoScrollBtn = document.getElementById('autoScrollBtn');
+    let logAutoScroll = true;
+    let logOpen       = false;
+    let knownLogCount = 0;
+    let logLines      = [];
+
+    function toggleLogPanel() {
+        logOpen = !logOpen;
+        logPanel.classList.toggle('open', logOpen);
+        if (logOpen) fetchLogs();
+    }
+
+    function toggleAutoScroll() {
+        logAutoScroll = !logAutoScroll;
+        autoScrollBtn.classList.toggle('active', logAutoScroll);
+        if (logAutoScroll) scrollLogToBottom();
+    }
+
+    function clearLogs() {
+        logLines = [];
+        knownLogCount = 0;
+        renderLogs([]);
+    }
+
+    function scrollLogToBottom() {
+        logBody.scrollTop = logBody.scrollHeight;
+    }
+
+    function getLogLevel(line) {
+        if (line.includes('[ERROR]') || line.includes('[CRITICAL]')) return 'error';
+        if (line.includes('[WARNING]')) return 'warning';
+        if (line.includes('[INFO]')) return 'info';
+        return '';
+    }
+
+    function renderLogs(lines, newCount) {
+        if (lines.length === 0) {
+            logBody.innerHTML = '<div class="log-empty">No logs yet...</div>';
+            logCountEl.textContent = '0';
+            return;
+        }
+        logCountEl.textContent = lines.length;
+
+        // Build only new lines for performance
+        const fragment = document.createDocumentFragment();
+        const startIdx = Math.max(0, lines.length - (newCount || lines.length));
+
+        // If full re-render needed
+        if (!newCount || newCount >= lines.length) {
+            logBody.innerHTML = '';
+            for (let i = 0; i < lines.length; i++) {
+                const div = document.createElement('div');
+                div.className = 'log-line';
+                const lvl = getLogLevel(lines[i]);
+                if (lvl) div.classList.add('lvl-' + lvl);
+                div.textContent = lines[i];
+                fragment.appendChild(div);
+            }
+        } else {
+            // Append only new lines
+            for (let i = startIdx; i < lines.length; i++) {
+                const div = document.createElement('div');
+                div.className = 'log-line new-line';
+                const lvl = getLogLevel(lines[i]);
+                if (lvl) div.classList.add('lvl-' + lvl);
+                div.textContent = lines[i];
+                fragment.appendChild(div);
+            }
+        }
+        logBody.appendChild(fragment);
+
+        // Trim displayed lines if too many
+        while (logBody.children.length > 500) {
+            logBody.removeChild(logBody.firstChild);
+        }
+
+        if (logAutoScroll) scrollLogToBottom();
+    }
+
+    function fetchLogs() {
+        fetch('/api/logs?n=200')
+            .then(r => r.json())
+            .then(data => {
+                const newLines = data.lines;
+                const newCount = newLines.length - logLines.length;
+
+                if (newLines.length !== logLines.length || (newLines.length > 0 && newLines[newLines.length-1] !== logLines[logLines.length-1])) {
+                    const actualNew = newCount > 0 ? newCount : newLines.length;
+                    logLines = newLines;
+                    if (actualNew === newLines.length) {
+                        renderLogs(logLines);
+                    } else {
+                        renderLogs(logLines, actualNew);
+                    }
+                }
+                knownLogCount = data.total;
+            })
+            .catch(() => {});
+    }
+
+    // Poll logs every 2 seconds
+    setInterval(() => {
+        if (logOpen) fetchLogs();
+    }, 2000);
+
+    // Initial fetch
+    fetchLogs();
 </script>
 </body>
 </html>
