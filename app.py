@@ -21,7 +21,7 @@ import logging
 import os
 import threading
 import time
-import requests
+import requests as http_requests
 from collections import deque
 from flask import Flask, Response, render_template, jsonify, request
 
@@ -328,22 +328,25 @@ def system_stats():
 def _discover_ngrok_url():
     """Try to find the public ngrok URL and log it."""
     time.sleep(5)  # Let ngrok start up
-    for _ in range(12):  # Try for 1 minute
+    for attempt in range(12):  # Try for 1 minute
         try:
-            # We try to reach ngrok container via its network name
-            response = requests.get("http://ngrok:4040/api/tunnels", timeout=2)
-            if response.status_code == 200:
-                data = response.json()
+            resp = http_requests.get("http://ngrok:4040/api/tunnels", timeout=3)
+            if resp.status_code == 200:
+                data = resp.json()
                 tunnels = data.get("tunnels", [])
                 for tunnel in tunnels:
-                    if tunnel.get("proto") == "https":
-                        url = tunnel.get("public_url")
-                        log.info("\n" + "="*50 + f"\n🚀 SITE IS LIVE AT: {url}\n" + "="*50)
+                    url = tunnel.get("public_url", "")
+                    if url.startswith("https://"):
+                        log.info("")
+                        log.info("=" * 55)
+                        log.info("  🚀 SITE IS LIVE AT: %s", url)
+                        log.info("=" * 55)
+                        log.info("")
                         return
         except Exception:
             pass
         time.sleep(5)
-    log.warning("Could not automatically find ngrok URL. Check http://localhost:4040 manually.")
+    log.warning("Could not find ngrok URL. Run: docker exec picam-ngrok curl -s http://localhost:4040/api/tunnels")
 
 
 if __name__ == "__main__":

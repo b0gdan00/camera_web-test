@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libswscale-dev \
     libv4l-dev \
     v4l-utils \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -26,6 +27,10 @@ WORKDIR /app
 # Install Python deps
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Try picamera2 separately (may fail on non-Pi, that's OK)
+RUN pip install --no-cache-dir picamera2 2>/dev/null || \
+    echo "picamera2 skipped (not on Pi or missing deps — using OpenCV fallback)"
 
 # Copy application code
 COPY . .
