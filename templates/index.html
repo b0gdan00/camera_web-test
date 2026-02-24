@@ -322,6 +322,80 @@
             margin-left: 6px;
         }
         .det-count-badge.empty { opacity: .4; }
+
+        /* ── Login overlay ─────────────────────────── */
+        .login-overlay {
+            position: fixed; inset: 0; z-index: 100;
+            background: var(--bg);
+            display: flex; align-items: center; justify-content: center;
+            transition: opacity .4s, visibility .4s;
+        }
+        .login-overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+
+        .login-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 40px 36px;
+            width: 340px; max-width: 90vw;
+            text-align: center;
+            box-shadow: 0 30px 80px rgba(0,0,0,.5), 0 0 120px rgba(108,138,255,.06);
+        }
+        .login-card .logo-icon {
+            width: 56px; height: 56px; margin: 0 auto 16px;
+            border-radius: 14px;
+        }
+        .login-card .logo-icon svg { width: 28px; height: 28px; }
+        .login-card h2 { font-size: 1.2rem; font-weight: 700; margin-bottom: 4px; }
+        .login-card p { font-size: .82rem; color: var(--text-dim); margin-bottom: 20px; }
+
+        .login-input {
+            width: 100%; padding: 12px 16px;
+            font-family: inherit; font-size: .9rem; font-weight: 500;
+            background: var(--surface2); color: var(--text);
+            border: 1px solid var(--border); border-radius: 10px;
+            outline: none; transition: border-color .2s;
+        }
+        .login-input:focus { border-color: var(--accent); }
+        .login-input::placeholder { color: var(--text-dim); }
+
+        .login-btn {
+            width: 100%; margin-top: 12px;
+            padding: 12px; font-family: inherit;
+            font-size: .88rem; font-weight: 700; color: #fff;
+            background: var(--accent-g); border: none;
+            border-radius: 10px; cursor: pointer;
+            box-shadow: 0 4px 20px rgba(108,138,255,.3);
+            transition: transform .12s, box-shadow .2s;
+        }
+        .login-btn:hover { box-shadow: 0 6px 28px rgba(108,138,255,.4); }
+        .login-btn:active { transform: scale(.97); }
+
+        /* ── Viewers bar ───────────────────────────── */
+        .header-center {
+            display: flex; align-items: center; gap: 8px;
+            flex: 1; justify-content: center;
+            overflow-x: auto; padding: 0 12px;
+        }
+        .viewers-label {
+            font-size: .68rem; font-weight: 600; color: var(--text-dim);
+            text-transform: uppercase; letter-spacing: .04em;
+            white-space: nowrap;
+        }
+        .viewer-chip {
+            display: inline-flex; align-items: center; gap: 4px;
+            font-size: .72rem; font-weight: 600;
+            padding: 3px 10px; border-radius: 999px;
+            background: rgba(108,138,255,.1); color: var(--accent);
+            border: 1px solid rgba(108,138,255,.2);
+            white-space: nowrap;
+            animation: chipIn .3s ease-out;
+        }
+        .viewer-chip .viewer-dot {
+            width: 5px; height: 5px; border-radius: 50%;
+            background: var(--green); animation: pulse 2s infinite;
+        }
+        @keyframes chipIn { from { opacity: 0; transform: scale(.8); } to { opacity: 1; transform: scale(1); } }
     </style>
 </head>
 <body>
@@ -333,9 +407,12 @@
         </div>
         <span>PiCam Stream</span>
     </div>
+    <div class="header-center" id="viewersBar">
+        <span class="viewers-label">Watching:</span>
+    </div>
     <div class="status-badge" id="statusBadge">
         <span class="status-dot"></span>
-        <span id="statusText">Подключено</span>
+        <span id="statusText">Connected</span>
     </div>
 </header>
 
@@ -347,15 +424,15 @@
             <div class="timestamp" id="clock">--:--:--</div>
             <div class="error-overlay" id="errorOverlay">
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
-                <span>Нет сигнала с камеры</span>
+                <span>No signal from camera</span>
             </div>
-            <img id="stream" src="/video_feed" alt="Camera stream">
+            <img id="stream" alt="Camera stream">
         </div>
 
         <div class="action-bar">
             <button class="btn btn-primary" onclick="takeSnapshot()">
                 <svg viewBox="0 0 24 24"><path d="M19 5h-2.6l-1.2-1.4c-.2-.3-.6-.6-1-.6H9.8c-.4 0-.8.2-1 .6L7.6 5H5c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-7 13c-2.8 0-5-2.2-5-5s2.2-5 5-5 5 2.2 5 5-2.2 5-5 5zm0-8c-1.7 0-3 1.3-3 3s1.3 3 3 3 3-1.3 3-3-1.3-3-3-3z"/></svg>
-                Снимок
+                Snapshot
             </button>
             <button class="btn btn-ghost" onclick="toggleFullscreen()">
                 <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
@@ -436,13 +513,6 @@
                 </div>
                 <div class="toggle-row">
                     <div>
-                        <div class="toggle-label">Orange Cat Mode</div>
-                        <div class="toggle-sub">Highlight ginger/orange cats</div>
-                    </div>
-                    <div class="toggle on" id="orangeToggle" onclick="toggleOrangeCat()"></div>
-                </div>
-                <div class="toggle-row">
-                    <div>
                         <div class="toggle-label">All Objects</div>
                         <div class="toggle-sub">Show all 80 COCO classes</div>
                     </div>
@@ -494,6 +564,19 @@
     </div>
 
     <footer>PiCam Stream &middot; Raspberry Pi &middot; Flask + OpenCV</footer>
+</div>
+
+<!-- ── Login Overlay ────────────────────────── -->
+<div class="login-overlay" id="loginOverlay">
+    <div class="login-card">
+        <div class="logo-icon">
+            <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z" fill="#fff"/></svg>
+        </div>
+        <h2>PiCam Stream</h2>
+        <p>Enter your name to start watching</p>
+        <input type="text" class="login-input" id="nameInput" placeholder="Your name..." maxlength="30" autocomplete="off">
+        <button class="login-btn" id="joinBtn" onclick="joinStream()">Join Stream</button>
+    </div>
 </div>
 
 <!-- ── Server Log Panel ───────────────────────── -->

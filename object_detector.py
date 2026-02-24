@@ -1,9 +1,9 @@
 """
 Object detection module using YOLOv4-tiny via OpenCV DNN.
 
-Features:
+Optimized for Raspberry Pi 4:
   - Configurable target classes (default: cat)
-  - "Orange cat" mode: detects cats + verifies orange/ginger fur via HSV color
+  - Smaller input blob (320x320) for faster inference
   - Adjustable confidence threshold and detection interval
   - Draws bounding boxes with labels on frames
   - Thread-safe settings
@@ -31,32 +31,31 @@ WEIGHTS   = os.path.join(MODEL_DIR, "yolov4-tiny.weights")
 CONFIG    = os.path.join(MODEL_DIR, "yolov4-tiny.cfg")
 NAMES     = os.path.join(MODEL_DIR, "coco.names")
 
-# COCO classes of interest (index -> name)
-# cat = 15 in coco.names (0-indexed)
+# Default: detect only cats (COCO index 15)
 CAT_CLASS_ID = 15
 
-# HSV range for orange/ginger fur
-# Hue: 5-25 (orange), Saturation: 40-255, Value: 80-255
-ORANGE_HUE_LOW  = 5
-ORANGE_HUE_HIGH = 28
-ORANGE_SAT_LOW  = 40
-ORANGE_VAL_LOW  = 80
+# Palette for bounding boxes (BGR)
+BOX_COLORS = [
+    (255, 178, 50), (0, 255, 128), (50, 178, 255),
+    (200, 130, 255), (80, 255, 255), (255, 100, 100),
+    (100, 255, 100), (255, 255, 100), (180, 100, 255),
+]
 
 
 class ObjectDetector:
-    """YOLOv4-tiny object detector with orange cat detection."""
+    """YOLOv4-tiny object detector optimized for Pi 4."""
 
     def __init__(self):
         self._lock = threading.Lock()
 
-        # Settings (thread-safe via _lock)
+        # Settings
         self._enabled = False
         self._confidence = 0.45
         self._nms_threshold = 0.4
-        self._detect_interval = 3          # detect every N-th frame
-        self._target_classes: set[int] = {CAT_CLASS_ID}  # default: cat only
-        self._orange_cat_mode = True       # highlight orange cats
-        self._draw_all_objects = False      # if True, draw all 80 COCO classes
+        self._detect_interval = 3
+        self._target_classes: set[int] = {CAT_CLASS_ID}
+        self._draw_all_objects = False
+        self._input_size = 320  # smaller = faster (320 vs 416)
 
         # State
         self._frame_counter = 0
@@ -74,7 +73,7 @@ class ObjectDetector:
         if not all(os.path.isfile(f) for f in [WEIGHTS, CONFIG, NAMES]):
             log.warning(
                 "Model files not found in %s. "
-                "Run 'python download_model.py' to download them.",
+                "Run 'python download_model.py' to download.",
                 MODEL_DIR,
             )
             return
@@ -86,8 +85,6 @@ class ObjectDetector:
             log.info("Loading YOLOv4-tiny model...")
             t0 = time.monotonic()
             self._net = cv2.dnn.readNetFromDarknet(CONFIG, WEIGHTS)
-
-            # Use CPU (Pi 4 has no CUDA)
             self._net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
             self._net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
 
@@ -98,10 +95,7 @@ class ObjectDetector:
             ]
 
             elapsed = time.monotonic() - t0
-            log.info(
-                "YOLOv4-tiny loaded in %.1fs (%d classes)",
-                elapsed, len(self._classes),
-            )
+            log.info("YOLOv4-tiny loaded in %.1fs (%d classes)", elapsed, len(self._classes))
             self._available = True
 
         except Exception as e:
@@ -122,7 +116,6 @@ class ObjectDetector:
                 "enabled": self._enabled,
                 "confidence": self._confidence,
                 "detect_interval": self._detect_interval,
-                "orange_cat_mode": self._orange_cat_mode,
                 "draw_all_objects": self._draw_all_objects,
                 "available": self._available,
             }
@@ -143,11 +136,6 @@ class ObjectDetector:
         with self._lock:
             self._detect_interval = max(1, min(30, n))
             log.info("Detect interval: every %d frames", self._detect_interval)
-
-    def set_orange_cat_mode(self, on: bool) -> None:
-        with self._lock:
-            self._orange_cat_mode = on
-            log.info("Orange cat mode: %s", on)
 
     def set_draw_all_objects(self, on: bool) -> None:
         with self._lock:
@@ -198,11 +186,11 @@ class ObjectDetector:
             confidence_thresh = self._confidence
             nms_thresh = self._nms_threshold
             target_classes = self._target_classes.copy()
-            orange_mode = self._orange_cat_mode
+            input_sz = self._input_size
 
-        # Create blob (resize to 416x416 for YOLO)
+        # Create blob (320x320 for speed on Pi)
         blob = cv2.dnn.blobFromImage(
-            frame, 1.0 / 255.0, (416, 416),
+            frame, 1.0 / 255.0, (input_sz, input_sz),
             swapRB=True, crop=False,
         )
         self._net.setInput(blob)
@@ -223,7 +211,6 @@ class ObjectDetector:
                 if class_id not in target_classes:
                     continue
 
-                # Scale box to frame size
                 cx = int(detection[0] * w)
                 cy = int(detection[1] * h)
                 bw = int(detection[2] * w)
@@ -241,48 +228,14 @@ class ObjectDetector:
         detections = []
         for i in indices.flatten() if len(indices) > 0 else []:
             x, y, bw, bh = boxes[i]
-            det = {
+            detections.append({
                 "class_id": class_ids[i],
                 "class_name": self._classes[class_ids[i]] if class_ids[i] < len(self._classes) else "unknown",
                 "confidence": confidences[i],
                 "box": (x, y, bw, bh),
-                "is_orange_cat": False,
-            }
-
-            # Orange cat check
-            if orange_mode and class_ids[i] == CAT_CLASS_ID:
-                det["is_orange_cat"] = self._check_orange(frame, x, y, bw, bh)
-
-            detections.append(det)
+            })
 
         return detections
-
-    def _check_orange(self, frame: np.ndarray, x: int, y: int,
-                       w: int, h: int) -> bool:
-        """Check if the detected cat region has orange/ginger fur."""
-        fh, fw = frame.shape[:2]
-        # Clamp to frame bounds
-        x1 = max(0, x)
-        y1 = max(0, y)
-        x2 = min(fw, x + w)
-        y2 = min(fh, y + h)
-
-        if x2 - x1 < 10 or y2 - y1 < 10:
-            return False
-
-        roi = frame[y1:y2, x1:x2]
-        hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-
-        # Create mask for orange pixels
-        lower = np.array([ORANGE_HUE_LOW, ORANGE_SAT_LOW, ORANGE_VAL_LOW])
-        upper = np.array([ORANGE_HUE_HIGH, 255, 255])
-        mask = cv2.inRange(hsv, lower, upper)
-
-        # If more than 15% of pixels are orange, it's an orange cat
-        orange_ratio = np.count_nonzero(mask) / mask.size
-        log.debug("Orange ratio for cat: %.2f", orange_ratio)
-
-        return orange_ratio > 0.15
 
     def _draw_detections(self, frame: np.ndarray,
                           detections: list[dict]) -> np.ndarray:
@@ -293,38 +246,18 @@ class ObjectDetector:
             x, y, w, h = det["box"]
             conf = det["confidence"]
             name = det["class_name"]
-            is_orange = det["is_orange_cat"]
+            color = BOX_COLORS[det["class_id"] % len(BOX_COLORS)]
+            label = f"{name} {conf:.0%}"
 
-            # Colors
-            if is_orange:
-                color = (0, 140, 255)    # Orange (BGR)
-                label = f"ORANGE CAT {conf:.0%}"
-            elif det["class_id"] == CAT_CLASS_ID:
-                color = (0, 255, 128)    # Green
-                label = f"Cat {conf:.0%}"
-            else:
-                color = (255, 178, 50)   # Blue-ish
-                label = f"{name} {conf:.0%}"
-
-            # Draw box
             cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
 
-            # Draw label background
             (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 1)
             cv2.rectangle(frame, (x, y - th - 10), (x + tw + 6, y), color, -1)
-
-            # Draw label text
             cv2.putText(
                 frame, label, (x + 3, y - 5),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.55,
-                (0, 0, 0) if is_orange else (255, 255, 255),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255),
                 1, cv2.LINE_AA,
             )
-
-            # Extra highlight for orange cat
-            if is_orange:
-                cv2.rectangle(frame, (x - 2, y - 2), (x + w + 2, y + h + 2),
-                              (0, 100, 255), 3)
 
         return frame
 
@@ -335,7 +268,6 @@ class ObjectDetector:
                 {
                     "class": d["class_name"],
                     "confidence": round(d["confidence"], 3),
-                    "orange_cat": d["is_orange_cat"],
                     "box": d["box"],
                 }
                 for d in self._last_detections
