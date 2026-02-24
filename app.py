@@ -121,6 +121,13 @@ JPEG_QUALITY = 80
 
 app = Flask(__name__)
 
+
+@app.after_request
+def add_ngrok_headers(response):
+    """Help bypass ngrok browser warning for all responses."""
+    response.headers["ngrok-skip-browser-warning"] = "true"
+    return response
+
 camera = Camera(
     src=CAMERA_SRC,
     width=CAMERA_WIDTH,

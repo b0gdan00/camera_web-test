@@ -1,4 +1,21 @@
 // ══════════════════════════════════════════════════
+//  Ngrok: skip browser warning on free plan
+// ══════════════════════════════════════════════════
+(function() {
+    var originalFetch = window.fetch;
+    window.fetch = function(url, options) {
+        options = options || {};
+        options.headers = options.headers || {};
+        if (options.headers instanceof Headers) {
+            options.headers.set('ngrok-skip-browser-warning', 'true');
+        } else {
+            options.headers['ngrok-skip-browser-warning'] = 'true';
+        }
+        return originalFetch.call(this, url, options);
+    };
+})();
+
+// ══════════════════════════════════════════════════
 //  Auth / Viewers
 // ══════════════════════════════════════════════════
 var viewerName = sessionStorage.getItem('viewerName') || '';
