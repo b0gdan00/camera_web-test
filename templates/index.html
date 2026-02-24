@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PiCam Stream — Live</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg:        #0b0d13;
+            --surface:   #13161f;
+            --surface2:  #1a1e2a;
+            --border:    #232837;
+            --text:      #e2e6f0;
+            --text-dim:  #6b7394;
+            --accent:    #6c8aff;
+            --accent2:   #a96cff;
+            --accent-g:  linear-gradient(135deg, #6c8aff 0%, #a96cff 100%);
+            --red:       #ff4d6a;
+            --green:     #34d399;
+            --radius:    14px;
+            --radius-sm: 8px;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* ── Header ──────────────────────────────────── */
+        header {
+            padding: 16px 24px;
+            display: flex; align-items: center; justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+            backdrop-filter: blur(12px);
+            background: rgba(11,13,19,.8);
+            position: sticky; top: 0; z-index: 20;
+        }
+
+        .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.1rem; }
+        .logo-icon {
+            width: 30px; height: 30px;
+            background: var(--accent-g); border-radius: 8px;
+            display: grid; place-items: center;
+        }
+        .logo-icon svg { width: 16px; height: 16px; fill: #fff; }
+
+        .status-badge {
+            display: flex; align-items: center; gap: 6px;
+            font-size: .78rem; font-weight: 500; color: var(--green);
+            background: rgba(52,211,153,.08); padding: 5px 14px;
+            border-radius: 999px; border: 1px solid rgba(52,211,153,.18);
+        }
+        .status-badge.offline { color: var(--red); background: rgba(255,77,106,.08); border-color: rgba(255,77,106,.18); }
+        .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+        /* ── Layout ──────────────────────────────────── */
+        .app-layout {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 0;
+            min-height: calc(100vh - 58px);
+        }
+
+        @media (max-width: 860px) {
+            .app-layout { grid-template-columns: 1fr; }
+            .sidebar { border-left: none !important; border-top: 1px solid var(--border); }
+        }
+
+        /* ── Video area ──────────────────────────────── */
+        .video-area {
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            padding: 24px; gap: 16px;
+        }
+
+        .video-wrapper {
+            position: relative; width: 100%; max-width: 800px;
+            border-radius: var(--radius); overflow: hidden;
+            border: 1px solid var(--border); background: #000;
+            box-shadow: 0 20px 60px rgba(0,0,0,.4), 0 0 80px rgba(108,138,255,.05);
+            transition: box-shadow .4s;
+        }
+        .video-wrapper:hover { box-shadow: 0 24px 70px rgba(0,0,0,.55), 0 0 100px rgba(108,138,255,.1); }
+
+        .video-wrapper img {
+            display: block; width: 100%; height: auto;
+            aspect-ratio: 4/3; object-fit: contain; background: #000;
+        }
+
+        .live-pill {
+            position: absolute; top: 12px; left: 12px; z-index: 3;
+            background: var(--red); color: #fff;
+            font-size: .65rem; font-weight: 700; letter-spacing: .06em;
+            text-transform: uppercase; padding: 3px 10px; border-radius: 6px;
+            display: flex; align-items: center; gap: 5px;
+            box-shadow: 0 2px 10px rgba(255,77,106,.4);
+        }
+        .live-pill .dot { width: 5px; height: 5px; background: #fff; border-radius: 50%; animation: pulse 1.4s infinite; }
+
+        .timestamp {
+            position: absolute; top: 12px; right: 12px; z-index: 3;
+            font-size: .68rem; font-weight: 500; color: rgba(255,255,255,.7);
+            background: rgba(0,0,0,.55); backdrop-filter: blur(6px);
+            padding: 3px 10px; border-radius: 6px;
+        }
+
+        .error-overlay {
+            position: absolute; inset: 0; display: none;
+            flex-direction: column; justify-content: center; align-items: center; gap: 8px;
+            background: rgba(11,13,19,.88); backdrop-filter: blur(6px);
+            color: var(--red); font-weight: 600; font-size: .95rem; z-index: 5;
+        }
+        .error-overlay.visible { display: flex; }
+
+        /* action bar */
+        .action-bar { display: flex; gap: 8px; width: 100%; max-width: 800px; }
+        .btn {
+            font-family: inherit; font-size: .78rem; font-weight: 600;
+            border: none; padding: 8px 16px; border-radius: var(--radius-sm);
+            cursor: pointer; display: flex; align-items: center; gap: 6px;
+            transition: transform .12s, box-shadow .2s, background .2s; color: #fff;
+        }
+        .btn:active { transform: scale(.96); }
+        .btn svg { width: 14px; height: 14px; fill: currentColor; }
+        .btn-primary { background: var(--accent-g); box-shadow: 0 4px 16px rgba(108,138,255,.3); }
+        .btn-ghost { background: var(--surface2); border: 1px solid var(--border); }
+        .btn-ghost:hover { background: var(--border); }
+
+        /* ── Sidebar ─────────────────────────────────── */
+        .sidebar {
+            border-left: 1px solid var(--border);
+            background: var(--surface);
+            padding: 20px;
+            display: flex; flex-direction: column; gap: 20px;
+            overflow-y: auto;
+        }
+
+        .panel-title {
+            font-size: .7rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: .08em; color: var(--text-dim); margin-bottom: 10px;
+        }
+
+        .panel { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+
+        /* range slider */
+        .slider-row { margin-top: 0; }
+        .slider-row + .slider-row { margin-top: 16px; }
+
+        .slider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        .slider-label { font-size: .82rem; font-weight: 500; }
+        .slider-value {
+            font-size: .78rem; font-weight: 700; color: var(--accent);
+            background: rgba(108,138,255,.1); padding: 2px 8px; border-radius: 4px;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none; appearance: none;
+            width: 100%; height: 6px; border-radius: 3px;
+            background: var(--border); outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none;
+            width: 18px; height: 18px; border-radius: 50%;
+            background: var(--accent); cursor: pointer;
+            box-shadow: 0 0 8px rgba(108,138,255,.4);
+            border: 2px solid var(--surface);
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 18px; height: 18px; border-radius: 50%;
+            background: var(--accent); cursor: pointer;
+            box-shadow: 0 0 8px rgba(108,138,255,.4);
+            border: 2px solid var(--surface);
+        }
+
+        /* info cards */
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .info-card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius-sm); padding: 10px 12px;
+        }
+        .info-card .lbl { font-size: .65rem; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; }
+        .info-card .val { font-size: 1rem; font-weight: 700; margin-top: 2px; }
+
+        footer {
+            padding: 14px 24px; font-size: .7rem; color: var(--text-dim);
+            text-align: center; border-top: 1px solid var(--border);
+            grid-column: 1 / -1;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo">
+        <div class="logo-icon">
+            <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+        </div>
+        <span>PiCam Stream</span>
+    </div>
+    <div class="status-badge" id="statusBadge">
+        <span class="status-dot"></span>
+        <span id="statusText">Подключено</span>
+    </div>
+</header>
+
+<div class="app-layout">
+    <!-- ── Video ────────────────────────────── -->
+    <div class="video-area">
+        <div class="video-wrapper" id="videoWrapper">
+            <div class="live-pill"><span class="dot"></span> Live</div>
+            <div class="timestamp" id="clock">--:--:--</div>
+            <div class="error-overlay" id="errorOverlay">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+                <span>Нет сигнала с камеры</span>
+            </div>
+            <img id="stream" src="/video_feed" alt="Camera stream">
+        </div>
+
+        <div class="action-bar">
+            <button class="btn btn-primary" onclick="takeSnapshot()">
+                <svg viewBox="0 0 24 24"><path d="M19 5h-2.6l-1.2-1.4c-.2-.3-.6-.6-1-.6H9.8c-.4 0-.8.2-1 .6L7.6 5H5c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-7 13c-2.8 0-5-2.2-5-5s2.2-5 5-5 5 2.2 5 5-2.2 5-5 5zm0-8c-1.7 0-3 1.3-3 3s1.3 3 3 3 3-1.3 3-3-1.3-3-3-3z"/></svg>
+                Снимок
+            </button>
+            <button class="btn btn-ghost" onclick="toggleFullscreen()">
+                <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+                Полный экран
+            </button>
+        </div>
+    </div>
+
+    <!-- ── Sidebar ──────────────────────────── -->
+    <div class="sidebar">
+        <!-- Camera settings -->
+        <div>
+            <div class="panel-title">⚙️ Настройки камеры</div>
+            <div class="panel">
+                <div class="slider-row">
+                    <div class="slider-header">
+                        <span class="slider-label">Качество JPEG</span>
+                        <span class="slider-value" id="qualityVal">80</span>
+                    </div>
+                    <input type="range" id="qualitySlider" min="10" max="100" step="5" value="80"
+                           oninput="document.getElementById('qualityVal').textContent=this.value"
+                           onchange="updateSetting('jpeg_quality', parseInt(this.value))">
+                </div>
+                <div class="slider-row">
+                    <div class="slider-header">
+                        <span class="slider-label">Целевой FPS</span>
+                        <span class="slider-value" id="fpsVal">30</span>
+                    </div>
+                    <input type="range" id="fpsSlider" min="1" max="60" step="1" value="30"
+                           oninput="document.getElementById('fpsVal').textContent=this.value"
+                           onchange="updateSetting('fps', parseInt(this.value))">
+                </div>
+            </div>
+        </div>
+
+        <!-- Info -->
+        <div>
+            <div class="panel-title">📊 Информация</div>
+            <div class="info-grid">
+                <div class="info-card">
+                    <div class="lbl">Разрешение</div>
+                    <div class="val">640×480</div>
+                </div>
+                <div class="info-card">
+                    <div class="lbl">Формат</div>
+                    <div class="val">MJPEG</div>
+                </div>
+                <div class="info-card">
+                    <div class="lbl">Порт</div>
+                    <div class="val">5000</div>
+                </div>
+                <div class="info-card">
+                    <div class="lbl">Статус</div>
+                    <div class="val" id="streamStatus" style="color:var(--green)">Online</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>PiCam Stream &middot; Raspberry Pi &middot; Flask + OpenCV</footer>
+</div>
+
+<script>
+    // ── Clock
+    function updateClock() {
+        document.getElementById('clock').textContent =
+            new Date().toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    // ── Status
+    const streamImg  = document.getElementById('stream');
+    const badge      = document.getElementById('statusBadge');
+    const statusText = document.getElementById('statusText');
+    const statusCard = document.getElementById('streamStatus');
+    const errorOvl   = document.getElementById('errorOverlay');
+
+    function setOnline(on) {
+        badge.classList.toggle('offline', !on);
+        statusText.textContent = on ? 'Подключено' : 'Отключено';
+        statusCard.textContent = on ? 'Online' : 'Offline';
+        statusCard.style.color = on ? 'var(--green)' : 'var(--red)';
+        errorOvl.classList.toggle('visible', !on);
+    }
+
+    streamImg.addEventListener('error', () => setOnline(false));
+    streamImg.addEventListener('load',  () => setOnline(true));
+    setInterval(() => {
+        fetch('/snapshot', {method:'HEAD'}).then(r => setOnline(r.ok)).catch(() => setOnline(false));
+    }, 5000);
+
+    // ── Settings API
+    function updateSetting(key, value) {
+        const body = {}; body[key] = value;
+        fetch('/api/settings', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body),
+        }).then(r => r.json()).then(syncUI).catch(e => console.error('Settings error:', e));
+    }
+
+    function syncUI(s) {
+        document.getElementById('qualitySlider').value = s.jpeg_quality;
+        document.getElementById('qualityVal').textContent = s.jpeg_quality;
+        document.getElementById('fpsSlider').value = s.fps;
+        document.getElementById('fpsVal').textContent = s.fps;
+    }
+
+    fetch('/api/settings').then(r => r.json()).then(syncUI).catch(() => {});
+
+    // ── Actions
+    function takeSnapshot() {
+        const a = document.createElement('a');
+        a.href = '/snapshot'; a.download = 'snapshot_' + Date.now() + '.jpg'; a.click();
+    }
+
+    function toggleFullscreen() {
+        const el = document.getElementById('videoWrapper');
+        if (!document.fullscreenElement) el.requestFullscreen().catch(() => {});
+        else document.exitFullscreen();
+    }
+</script>
+</body>
+</html>
