@@ -376,6 +376,7 @@
             display: flex; align-items: center; gap: 8px;
             flex: 1; justify-content: center;
             overflow-x: auto; padding: 0 12px;
+            position: relative;
         }
         .viewers-label {
             font-size: .68rem; font-weight: 600; color: var(--text-dim);
@@ -396,6 +397,58 @@
             background: var(--green); animation: pulse 2s infinite;
         }
         @keyframes chipIn { from { opacity: 0; transform: scale(.8); } to { opacity: 1; transform: scale(1); } }
+
+        /* Viewers dropdown toggle (mobile) */
+        .viewers-toggle {
+            display: none;
+            font-family: inherit; font-size: .72rem; font-weight: 600;
+            padding: 4px 12px; border-radius: 999px;
+            background: rgba(108,138,255,.1); color: var(--accent);
+            border: 1px solid rgba(108,138,255,.2);
+            cursor: pointer; transition: background .2s;
+            white-space: nowrap;
+        }
+        .viewers-toggle:hover { background: rgba(108,138,255,.18); }
+        .viewers-toggle svg { width: 12px; height: 12px; fill: currentColor; vertical-align: -1px; margin-right: 3px; }
+
+        .viewers-dropdown {
+            display: none; position: absolute;
+            top: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+            min-width: 180px; max-width: 280px;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 12px; padding: 10px 12px;
+            box-shadow: 0 12px 40px rgba(0,0,0,.5);
+            z-index: 30;
+            flex-direction: column; gap: 6px;
+        }
+        .viewers-dropdown.open { display: flex; }
+        .viewers-dropdown .viewer-chip { width: 100%; justify-content: flex-start; }
+        .viewers-dropdown-title {
+            font-size: .6rem; font-weight: 700; color: var(--text-dim);
+            text-transform: uppercase; letter-spacing: .06em; margin-bottom: 2px;
+        }
+
+        /* Desktop: inline chips, hide toggle */
+        .viewers-inline { display: contents; }
+
+        /* Mobile: hide inline, show toggle */
+        @media (max-width: 860px) {
+            .viewers-inline { display: none !important; }
+            .viewers-toggle { display: inline-flex; align-items: center; }
+            .header-center { overflow: visible; }
+        }
+
+        /* Leave button */
+        .leave-btn {
+            font-family: inherit; font-size: .7rem; font-weight: 600;
+            padding: 5px 12px; border-radius: 8px;
+            background: rgba(255,77,106,.1); color: var(--red);
+            border: 1px solid rgba(255,77,106,.2);
+            cursor: pointer; transition: background .2s;
+            white-space: nowrap; margin-left: 8px;
+        }
+        .leave-btn:hover { background: rgba(255,77,106,.2); }
+        .leave-btn svg { width: 12px; height: 12px; fill: currentColor; vertical-align: -1px; margin-right: 3px; }
     </style>
 </head>
 <body>
@@ -409,10 +462,25 @@
     </div>
     <div class="header-center" id="viewersBar">
         <span class="viewers-label">Watching:</span>
+        <span class="viewers-inline" id="viewersInline"></span>
+        <button class="viewers-toggle" id="viewersToggle" onclick="toggleViewersDropdown()">
+            <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+            <span id="viewersCount">0</span> online
+        </button>
+        <div class="viewers-dropdown" id="viewersDropdown">
+            <div class="viewers-dropdown-title">Viewers online</div>
+            <div id="viewersDropdownList"></div>
+        </div>
     </div>
-    <div class="status-badge" id="statusBadge">
-        <span class="status-dot"></span>
-        <span id="statusText">Connected</span>
+    <div style="display:flex;align-items:center;gap:6px">
+        <div class="status-badge" id="statusBadge">
+            <span class="status-dot"></span>
+            <span id="statusText">Connected</span>
+        </div>
+        <button class="leave-btn" id="leaveBtn" onclick="leaveStream()" style="display:none">
+            <svg viewBox="0 0 24 24"><path d="M10.09 15.59L11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5c-1.11 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>
+            Leave
+        </button>
     </div>
 </header>
 
@@ -601,14 +669,23 @@
     // ══════════════════════════════════════════════════
     //  Auth / Viewers
     // ══════════════════════════════════════════════════
-    let viewerName = sessionStorage.getItem('viewerName') || '';
-    const loginOverlay = document.getElementById('loginOverlay');
-    const nameInput    = document.getElementById('nameInput');
-    const viewersBar   = document.getElementById('viewersBar');
+    var viewerName = sessionStorage.getItem('viewerName') || '';
+    var loginOverlay    = document.getElementById('loginOverlay');
+    var nameInput       = document.getElementById('nameInput');
+    var viewersInline   = document.getElementById('viewersInline');
+    var viewersToggle   = document.getElementById('viewersToggle');
+    var viewersCount    = document.getElementById('viewersCount');
+    var viewersDropdown = document.getElementById('viewersDropdown');
+    var viewersDropdownList = document.getElementById('viewersDropdownList');
+    var leaveBtn        = document.getElementById('leaveBtn');
 
     nameInput.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') joinStream();
     });
+
+    function showLeaveBtn(show) {
+        leaveBtn.style.display = show ? 'inline-flex' : 'none';
+    }
 
     function joinStream() {
         var name = nameInput.value.trim();
@@ -626,15 +703,52 @@
 
         loginOverlay.classList.add('hidden');
         document.getElementById('stream').src = '/video_feed';
+        showLeaveBtn(true);
+    }
+
+    function leaveStream() {
+        if (!viewerName) return;
+        fetch('/api/leave', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name: viewerName}),
+        }).then(function(r) { return r.json(); })
+          .then(function(data) { renderViewers(data.viewers); })
+          .catch(function() {});
+
+        viewerName = '';
+        sessionStorage.removeItem('viewerName');
+        document.getElementById('stream').src = '';
+        loginOverlay.classList.remove('hidden');
+        nameInput.value = '';
+        showLeaveBtn(false);
     }
 
     function renderViewers(list) {
-        var html = '<span class="viewers-label">Watching:</span>';
+        // Inline chips (desktop)
+        var chips = '';
         for (var i = 0; i < list.length; i++) {
-            html += '<span class="viewer-chip"><span class="viewer-dot"></span>' + list[i] + '</span>';
+            chips += '<span class="viewer-chip"><span class="viewer-dot"></span>' + list[i] + '</span>';
         }
-        viewersBar.innerHTML = html;
+        viewersInline.innerHTML = chips;
+
+        // Dropdown list (mobile)
+        viewersDropdownList.innerHTML = chips;
+
+        // Update count on toggle button
+        viewersCount.textContent = list.length;
     }
+
+    function toggleViewersDropdown() {
+        viewersDropdown.classList.toggle('open');
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!viewersToggle.contains(e.target) && !viewersDropdown.contains(e.target)) {
+            viewersDropdown.classList.remove('open');
+        }
+    });
 
     // Heartbeat every 10s
     setInterval(function() {
@@ -660,6 +774,7 @@
     if (viewerName) {
         loginOverlay.classList.add('hidden');
         document.getElementById('stream').src = '/video_feed';
+        showLeaveBtn(true);
         fetch('/api/join', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},

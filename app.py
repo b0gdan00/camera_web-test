@@ -83,6 +83,13 @@ def _heartbeat_viewer(name: str) -> None:
             _viewers[name] = time.time()
 
 
+def _remove_viewer(name: str) -> None:
+    with _viewers_lock:
+        if name in _viewers:
+            del _viewers[name]
+            log.info("Viewer left: %s", name)
+
+
 def _get_viewers() -> list[str]:
     now = time.time()
     with _viewers_lock:
@@ -231,6 +238,16 @@ def heartbeat():
 def get_viewers():
     """Get list of current viewers."""
     return jsonify({"viewers": _get_viewers()})
+
+
+@app.route("/api/leave", methods=["POST"])
+def leave_viewer():
+    """Remove viewer. Body: {"name": "..."}"""
+    data = request.get_json(force=True)
+    name = str(data.get("name", "")).strip()
+    if name:
+        _remove_viewer(name)
+    return jsonify({"ok": True, "viewers": _get_viewers()})
 
 
 if __name__ == "__main__":
