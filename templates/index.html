@@ -268,6 +268,60 @@
         }
         .log-btn:hover { background: var(--border); color: var(--text); }
         .log-btn.active { background: rgba(108,138,255,.15); color: var(--accent); border-color: rgba(108,138,255,.3); }
+
+        /* ── Rotation buttons ───────────────────────── */
+        .rotation-group {
+            display: flex; gap: 6px; flex-wrap: wrap;
+        }
+        .rot-btn {
+            flex: 1; min-width: 55px;
+            font-family: inherit; font-size: .72rem; font-weight: 600;
+            background: var(--surface); color: var(--text-dim);
+            border: 1px solid var(--border); border-radius: var(--radius-sm);
+            padding: 8px 6px; cursor: pointer;
+            display: flex; flex-direction: column; align-items: center; gap: 4px;
+            transition: all .2s;
+        }
+        .rot-btn:hover { background: var(--border); color: var(--text); }
+        .rot-btn.active {
+            background: rgba(108,138,255,.12); color: var(--accent);
+            border-color: rgba(108,138,255,.35);
+            box-shadow: 0 0 12px rgba(108,138,255,.15);
+        }
+        .rot-btn svg { width: 18px; height: 18px; fill: currentColor; }
+
+        /* ── Toggle switch ──────────────────────────── */
+        .toggle-row {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 6px 0;
+        }
+        .toggle-row + .toggle-row { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 10px; }
+        .toggle-label { font-size: .8rem; font-weight: 500; }
+        .toggle-sub { font-size: .65rem; color: var(--text-dim); margin-top: 1px; }
+        .toggle {
+            position: relative; width: 40px; height: 22px;
+            background: var(--border); border-radius: 11px;
+            cursor: pointer; transition: background .25s;
+            flex-shrink: 0;
+        }
+        .toggle.on { background: var(--accent); }
+        .toggle::after {
+            content: ''; position: absolute; top: 3px; left: 3px;
+            width: 16px; height: 16px; border-radius: 50%;
+            background: #fff; transition: transform .25s;
+            box-shadow: 0 1px 4px rgba(0,0,0,.3);
+        }
+        .toggle.on::after { transform: translateX(18px); }
+
+        /* Detection badge */
+        .det-count-badge {
+            display: inline-flex; align-items: center; gap: 4px;
+            font-size: .65rem; font-weight: 700;
+            padding: 2px 8px; border-radius: 999px;
+            background: rgba(255,140,0,.12); color: #ff8c00;
+            margin-left: 6px;
+        }
+        .det-count-badge.empty { opacity: .4; }
     </style>
 </head>
 <body>
@@ -318,11 +372,11 @@
     <div class="sidebar">
         <!-- Camera settings -->
         <div>
-            <div class="panel-title">⚙️ Настройки камеры</div>
+            <div class="panel-title">Camera Settings</div>
             <div class="panel">
                 <div class="slider-row">
                     <div class="slider-header">
-                        <span class="slider-label">Качество JPEG</span>
+                        <span class="slider-label">JPEG Quality</span>
                         <span class="slider-value" id="qualityVal">80</span>
                     </div>
                     <input type="range" id="qualitySlider" min="10" max="100" step="5" value="80"
@@ -331,7 +385,7 @@
                 </div>
                 <div class="slider-row">
                     <div class="slider-header">
-                        <span class="slider-label">Целевой FPS</span>
+                        <span class="slider-label">Target FPS</span>
                         <span class="slider-value" id="fpsVal">30</span>
                     </div>
                     <input type="range" id="fpsSlider" min="1" max="60" step="1" value="30"
@@ -341,24 +395,98 @@
             </div>
         </div>
 
+        <!-- Rotation -->
+        <div>
+            <div class="panel-title">Rotation</div>
+            <div class="panel">
+                <div class="rotation-group">
+                    <button class="rot-btn active" data-rot="0" onclick="setRotation(0)">
+                        <svg viewBox="0 0 24 24"><path d="M3 5v14h18V5H3zm16 12H5V7h14v10z"/></svg>
+                        0&deg;
+                    </button>
+                    <button class="rot-btn" data-rot="90" onclick="setRotation(90)">
+                        <svg viewBox="0 0 24 24"><path d="M15.55 5.55L11 1v3.07C7.06 4.56 4 7.92 4 12s3.05 7.44 7 7.93v-2.02c-2.84-.48-5-2.94-5-5.91s2.16-5.43 5-5.91V10l4.55-4.45zM19.93 11a7.9 7.9 0 0 0-1.62-3.89l-1.42 1.42c.54.75.88 1.6 1.02 2.47h2.02zM13 17.9v2.02c1.39-.17 2.74-.71 3.9-1.61l-1.44-1.44c-.75.54-1.59.89-2.46 1.03zm3.89-2.42l1.42 1.41A7.9 7.9 0 0 0 19.93 13h-2.02a5.9 5.9 0 0 1-1.02 2.48z"/></svg>
+                        90&deg;
+                    </button>
+                    <button class="rot-btn" data-rot="180" onclick="setRotation(180)">
+                        <svg viewBox="0 0 24 24"><path d="M12 6v3l4-4-4-4v3c-4.42 0-8 3.58-8 8 0 1.57.46 3.03 1.24 4.26L6.7 14.8A5.87 5.87 0 0 1 6 12c0-3.31 2.69-6 6-6zm6.76 1.74L17.3 9.2c.44.84.7 1.79.7 2.8 0 3.31-2.69 6-6 6v-3l-4 4 4 4v-3c4.42 0 8-3.58 8-8 0-1.57-.46-3.03-1.24-4.26z"/></svg>
+                        180&deg;
+                    </button>
+                    <button class="rot-btn" data-rot="270" onclick="setRotation(270)">
+                        <svg viewBox="0 0 24 24"><path d="M8.45 5.55L13 1v3.07c3.94.49 7 3.85 7 7.93s-3.05 7.44-7 7.93v-2.02c2.84-.48 5-2.94 5-5.91s-2.16-5.43-5-5.91V10L8.45 5.55zM4.07 11a7.9 7.9 0 0 1 1.62-3.89l1.42 1.42A5.9 5.9 0 0 0 6.09 11H4.07zM11 17.9v2.02a7.94 7.94 0 0 1-3.9-1.61l1.44-1.44c.75.54 1.59.89 2.46 1.03zm-3.89-2.42l-1.42 1.41A7.9 7.9 0 0 1 4.07 13h2.02c.14.87.48 1.72 1.02 2.48z"/></svg>
+                        270&deg;
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detection -->
+        <div>
+            <div class="panel-title">
+                Object Detection
+                <span class="det-count-badge empty" id="detCountBadge">0 objects</span>
+            </div>
+            <div class="panel">
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Enable Detection</div>
+                        <div class="toggle-sub">YOLOv4-tiny (COCO 80 classes)</div>
+                    </div>
+                    <div class="toggle" id="detToggle" onclick="toggleDetection()"></div>
+                </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Orange Cat Mode</div>
+                        <div class="toggle-sub">Highlight ginger/orange cats</div>
+                    </div>
+                    <div class="toggle on" id="orangeToggle" onclick="toggleOrangeCat()"></div>
+                </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">All Objects</div>
+                        <div class="toggle-sub">Show all 80 COCO classes</div>
+                    </div>
+                    <div class="toggle" id="allObjToggle" onclick="toggleAllObjects()"></div>
+                </div>
+                <div class="slider-row" style="margin-top:12px">
+                    <div class="slider-header">
+                        <span class="slider-label">Confidence</span>
+                        <span class="slider-value" id="confVal">45%</span>
+                    </div>
+                    <input type="range" id="confSlider" min="10" max="90" step="5" value="45"
+                           oninput="document.getElementById('confVal').textContent=this.value+'%'"
+                           onchange="updateDetection('confidence', parseInt(this.value)/100)">
+                </div>
+                <div class="slider-row">
+                    <div class="slider-header">
+                        <span class="slider-label">Detect every N frames</span>
+                        <span class="slider-value" id="intervalVal">3</span>
+                    </div>
+                    <input type="range" id="intervalSlider" min="1" max="15" step="1" value="3"
+                           oninput="document.getElementById('intervalVal').textContent=this.value"
+                           onchange="updateDetection('detect_interval', parseInt(this.value))">
+                </div>
+            </div>
+        </div>
+
         <!-- Info -->
         <div>
-            <div class="panel-title">📊 Информация</div>
+            <div class="panel-title">Info</div>
             <div class="info-grid">
                 <div class="info-card">
-                    <div class="lbl">Разрешение</div>
-                    <div class="val">640×480</div>
+                    <div class="lbl">Resolution</div>
+                    <div class="val">640x480</div>
                 </div>
                 <div class="info-card">
-                    <div class="lbl">Формат</div>
+                    <div class="lbl">Format</div>
                     <div class="val">MJPEG</div>
                 </div>
                 <div class="info-card">
-                    <div class="lbl">Порт</div>
+                    <div class="lbl">Port</div>
                     <div class="val">5000</div>
                 </div>
                 <div class="info-card">
-                    <div class="lbl">Статус</div>
+                    <div class="lbl">Status</div>
                     <div class="val" id="streamStatus" style="color:var(--green)">Online</div>
                 </div>
             </div>
@@ -431,9 +559,95 @@
         document.getElementById('qualityVal').textContent = s.jpeg_quality;
         document.getElementById('fpsSlider').value = s.fps;
         document.getElementById('fpsVal').textContent = s.fps;
+        // Update rotation buttons
+        if (s.rotation !== undefined) {
+            document.querySelectorAll('.rot-btn').forEach(btn => {
+                btn.classList.toggle('active', parseInt(btn.dataset.rot) === s.rotation);
+            });
+        }
     }
 
     fetch('/api/settings').then(r => r.json()).then(syncUI).catch(() => {});
+
+    // ── Rotation
+    function setRotation(deg) {
+        updateSetting('rotation', deg);
+        // Immediate visual feedback
+        document.querySelectorAll('.rot-btn').forEach(btn => {
+            btn.classList.toggle('active', parseInt(btn.dataset.rot) === deg);
+        });
+    }
+
+    // ── Detection API ────────────────────────────────
+    const detToggle    = document.getElementById('detToggle');
+    const orangeToggle = document.getElementById('orangeToggle');
+    const allObjToggle = document.getElementById('allObjToggle');
+    const detBadge     = document.getElementById('detCountBadge');
+    let detEnabled     = false;
+
+    function updateDetection(key, value) {
+        const body = {}; body[key] = value;
+        fetch('/api/detection', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body),
+        }).then(r => r.json()).then(syncDetectionUI)
+          .catch(e => console.error('Detection error:', e));
+    }
+
+    function toggleDetection() {
+        detEnabled = !detEnabled;
+        updateDetection('enabled', detEnabled);
+        detToggle.classList.toggle('on', detEnabled);
+    }
+
+    function toggleOrangeCat() {
+        const on = !orangeToggle.classList.contains('on');
+        updateDetection('orange_cat_mode', on);
+        orangeToggle.classList.toggle('on', on);
+    }
+
+    function toggleAllObjects() {
+        const on = !allObjToggle.classList.contains('on');
+        updateDetection('draw_all_objects', on);
+        allObjToggle.classList.toggle('on', on);
+    }
+
+    function syncDetectionUI(s) {
+        detEnabled = s.enabled;
+        detToggle.classList.toggle('on', s.enabled);
+        orangeToggle.classList.toggle('on', s.orange_cat_mode);
+        allObjToggle.classList.toggle('on', s.draw_all_objects);
+
+        document.getElementById('confSlider').value = Math.round(s.confidence * 100);
+        document.getElementById('confVal').textContent = Math.round(s.confidence * 100) + '%';
+        document.getElementById('intervalSlider').value = s.detect_interval;
+        document.getElementById('intervalVal').textContent = s.detect_interval;
+
+        // Update detection count badge
+        const count = s.detections ? s.detections.length : 0;
+        detBadge.textContent = count + (count === 1 ? ' object' : ' objects');
+        detBadge.classList.toggle('empty', count === 0);
+
+        // Show orange cats specially
+        if (s.detections) {
+            const oranges = s.detections.filter(d => d.orange_cat);
+            if (oranges.length > 0) {
+                detBadge.textContent += ' (🐱 ' + oranges.length + ' orange)';
+                detBadge.style.background = 'rgba(255,100,0,.2)';
+            } else {
+                detBadge.style.background = '';
+            }
+        }
+    }
+
+    // Initial detection state + periodic poll
+    fetch('/api/detection').then(r => r.json()).then(syncDetectionUI).catch(() => {});
+    setInterval(() => {
+        if (detEnabled) {
+            fetch('/api/detection').then(r => r.json()).then(syncDetectionUI).catch(() => {});
+        }
+    }, 3000);
 
     // ── Actions
     function takeSnapshot() {

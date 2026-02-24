@@ -12,6 +12,8 @@ import threading
 import logging
 import cv2
 
+from object_detector import ObjectDetector
+
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("camera")
 
@@ -34,12 +36,16 @@ class Camera:
         self._height = height
         self._fps = fps
         self._jpeg_quality = jpeg_quality
+        self._rotation = 0  # 0, 90, 180, 270
 
         self._frame: bytes | None = None
         self._lock = threading.Lock()
         self._event = threading.Event()
         self._running = False
         self._settings_lock = threading.Lock()
+
+        # Object detector
+        self.detector = ObjectDetector()
 
         if _USE_PICAMERA2:
             self._cap = None
@@ -95,11 +101,21 @@ class Camera:
             self._fps = max(1, min(60, fps))
             log.info("Target FPS set to %d", self._fps)
 
+    def set_rotation(self, degrees: int) -> None:
+        """Set rotation: 0, 90, 180, or 270 degrees."""
+        degrees = degrees % 360
+        if degrees not in (0, 90, 180, 270):
+            degrees = 0
+        with self._settings_lock:
+            self._rotation = degrees
+            log.info("Rotation set to %d degrees", degrees)
+
     def get_settings(self) -> dict:
         with self._settings_lock:
             return {
                 "jpeg_quality": self._jpeg_quality,
                 "fps": self._fps,
+                "rotation": self._rotation,
             }
 
     # ── Capture thread ───────────────────────────────────────
@@ -135,6 +151,7 @@ class Camera:
             with self._settings_lock:
                 encode_params = [cv2.IMWRITE_JPEG_QUALITY, self._jpeg_quality]
                 interval = 1.0 / self._fps
+                rotation = self._rotation
 
             t0 = time.monotonic()
 
@@ -163,6 +180,17 @@ class Camera:
                 continue
 
             error_count = 0
+
+            # Apply rotation
+            if rotation == 90:
+                frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+            elif rotation == 180:
+                frame = cv2.rotate(frame, cv2.ROTATE_180)
+            elif rotation == 270:
+                frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
+            # Run object detection (if enabled)
+            frame = self.detector.process_frame(frame)
 
             ok, buf = cv2.imencode(".jpg", frame, encode_params)
             if ok:

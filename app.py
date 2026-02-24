@@ -122,6 +122,8 @@ def update_settings():
         camera.set_jpeg_quality(int(data["jpeg_quality"]))
     if "fps" in data:
         camera.set_fps(int(data["fps"]))
+    if "rotation" in data:
+        camera.set_rotation(int(data["rotation"]))
     return jsonify(camera.get_settings())
 
 
@@ -132,6 +134,36 @@ def get_logs():
     n = max(1, min(n, MAX_LOG_LINES))
     lines = _log_buffer.get_lines(n)
     return jsonify({"lines": lines, "total": _log_buffer.count()})
+
+
+@app.route("/api/detection", methods=["GET"])
+def get_detection():
+    """Return detection settings and current detections."""
+    settings = camera.detector.get_settings()
+    settings["detections"] = camera.detector.get_last_detections_summary()
+    return jsonify(settings)
+
+
+@app.route("/api/detection", methods=["POST"])
+def update_detection():
+    """Update detection settings."""
+    data = request.get_json(force=True)
+    det = camera.detector
+
+    if "enabled" in data:
+        det.set_enabled(bool(data["enabled"]))
+    if "confidence" in data:
+        det.set_confidence(float(data["confidence"]))
+    if "detect_interval" in data:
+        det.set_detect_interval(int(data["detect_interval"]))
+    if "orange_cat_mode" in data:
+        det.set_orange_cat_mode(bool(data["orange_cat_mode"]))
+    if "draw_all_objects" in data:
+        det.set_draw_all_objects(bool(data["draw_all_objects"]))
+
+    settings = det.get_settings()
+    settings["detections"] = det.get_last_detections_summary()
+    return jsonify(settings)
 
 
 if __name__ == "__main__":
