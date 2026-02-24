@@ -9,17 +9,26 @@ Routes
 /api/settings  - GET/POST camera settings (quality, fps, rotation)
 /api/logs      - GET server logs (last N lines)
 /api/detection - GET/POST detection settings
+/api/stats     - GET system resource usage
 /api/viewers   - GET current viewers
 /api/join      - POST join as viewer (name)
 /api/heartbeat - POST keep viewer alive
+/api/leave     - POST remove viewer
 """
 
 import atexit
 import logging
+import os
 import threading
 import time
 from collections import deque
 from flask import Flask, Response, render_template, jsonify, request
+
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    HAS_PSUTIL = False
 
 from camera import Camera
 
@@ -248,6 +257,71 @@ def leave_viewer():
     if name:
         _remove_viewer(name)
     return jsonify({"ok": True, "viewers": _get_viewers()})
+
+
+# ── System Stats ─────────────────────────────────────────────────
+
+def _get_cpu_temp() -> float | None:
+    """Read CPU temperature (Raspberry Pi)."""
+    try:
+        with open("/sys/class/thermal/thermal_zone0/temp") as f:
+            return round(int(f.read().strip()) / 1000, 1)
+    except (FileNotFoundError, ValueError):
+        pass
+    if HAS_PSUTIL:
+        temps = psutil.sensors_temperatures()
+        if temps:
+            for entries in temps.values():
+                if entries:
+                    return round(entries[0].current, 1)
+    return None
+
+
+def _get_uptime() -> str:
+    """Human-readable uptime."""
+    try:
+        with open("/proc/uptime") as f:
+            secs = int(float(f.read().split()[0]))
+    except (FileNotFoundError, ValueError):
+        if HAS_PSUTIL:
+            secs = int(time.time() - psutil.boot_time())
+        else:
+            return "N/A"
+    days, rem = divmod(secs, 86400)
+    hours, rem = divmod(rem, 3600)
+    mins, _ = divmod(rem, 60)
+    parts = []
+    if days:  parts.append(f"{days}d")
+    if hours: parts.append(f"{hours}h")
+    parts.append(f"{mins}m")
+    return " ".join(parts)
+
+
+@app.route("/api/stats", methods=["GET"])
+def system_stats():
+    """Return system resource usage."""
+    stats = {
+        "cpu_percent": None,
+        "ram_percent": None,
+        "ram_used_mb": None,
+        "ram_total_mb": None,
+        "disk_percent": None,
+        "disk_used_gb": None,
+        "disk_total_gb": None,
+        "cpu_temp": _get_cpu_temp(),
+        "uptime": _get_uptime(),
+    }
+    if HAS_PSUTIL:
+        stats["cpu_percent"] = psutil.cpu_percent(interval=0.3)
+        mem = psutil.virtual_memory()
+        stats["ram_percent"] = round(mem.percent, 1)
+        stats["ram_used_mb"] = round(mem.used / 1048576)
+        stats["ram_total_mb"] = round(mem.total / 1048576)
+        disk = psutil.disk_usage("/")
+        stats["disk_percent"] = round(disk.percent, 1)
+        stats["disk_used_gb"] = round(disk.used / 1073741824, 1)
+        stats["disk_total_gb"] = round(disk.total / 1073741824, 1)
+    return jsonify(stats)
 
 
 if __name__ == "__main__":

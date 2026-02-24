@@ -449,6 +449,70 @@
         }
         .leave-btn:hover { background: rgba(255,77,106,.2); }
         .leave-btn svg { width: 12px; height: 12px; fill: currentColor; vertical-align: -1px; margin-right: 3px; }
+
+        /* ── Stats Panel ──────────────────────────── */
+        .stats-panel {
+            position: fixed; bottom: 0; left: 0; right: 0; z-index: 49;
+            transform: translateY(100%);
+            transition: transform .35s cubic-bezier(.4,0,.2,1);
+        }
+        .stats-panel.open { transform: translateY(0); }
+
+        .stats-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #1a1e2a 0%, #13161f 100%);
+            border-top: 1px solid var(--border);
+            cursor: pointer; user-select: none;
+        }
+        .stats-header:hover { background: #1e2233; }
+        .stats-header-left { display: flex; align-items: center; gap: 8px; }
+        .stats-header-title {
+            font-size: .78rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: .06em; color: var(--text-dim);
+        }
+        .stats-toggle-icon {
+            width: 20px; height: 20px; fill: var(--text-dim);
+            transition: transform .3s;
+        }
+        .stats-panel.open .stats-toggle-icon { transform: rotate(180deg); }
+
+        .stats-body {
+            background: #0a0c10;
+            padding: 16px 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+        }
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px 14px;
+        }
+        .stat-card .stat-label {
+            font-size: .62rem; font-weight: 700;
+            text-transform: uppercase; letter-spacing: .06em;
+            color: var(--text-dim); margin-bottom: 6px;
+        }
+        .stat-card .stat-value {
+            font-size: 1.2rem; font-weight: 800;
+            margin-bottom: 6px;
+        }
+        .stat-card .stat-sub {
+            font-size: .65rem; color: var(--text-dim);
+        }
+        .stat-bar {
+            width: 100%; height: 4px; border-radius: 2px;
+            background: var(--border); margin-top: 6px; overflow: hidden;
+        }
+        .stat-bar-fill {
+            height: 100%; border-radius: 2px;
+            transition: width .5s ease-out;
+        }
+        .stat-bar-fill.green { background: var(--green); }
+        .stat-bar-fill.yellow { background: #f0b040; }
+        .stat-bar-fill.red { background: var(--red); }
     </style>
 </head>
 <body>
@@ -509,6 +573,10 @@
             <button class="btn btn-ghost" onclick="toggleLogPanel()" id="logToggleBtn">
                 <svg viewBox="0 0 24 24"><path d="M20 6h-1v8c0 .55-.45 1-1 1H6v1c0 1.1.9 2 2 2h10l4 4V8c0-1.1-.9-2-2-2zm-3 5V4c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v13l4-4h9c1.1 0 2-.9 2-2z"/></svg>
                 Server Logs
+            </button>
+            <button class="btn btn-ghost" onclick="toggleStatsPanel()" id="statsToggleBtn">
+                <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+                System Stats
             </button>
         </div>
     </div>
@@ -662,6 +730,43 @@
     </div>
     <div class="log-body" id="logBody">
         <div class="log-empty">Waiting for server logs...</div>
+    </div>
+</div>
+
+<!-- ── System Stats Panel ────────────────────── -->
+<div class="stats-panel" id="statsPanel">
+    <div class="stats-header" onclick="toggleStatsPanel()">
+        <div class="stats-header-left">
+            <svg class="stats-toggle-icon" viewBox="0 0 24 24"><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg>
+            <span class="stats-header-title">System Resources</span>
+        </div>
+    </div>
+    <div class="stats-body" id="statsBody">
+        <div class="stat-card">
+            <div class="stat-label">CPU Usage</div>
+            <div class="stat-value" id="statCpu">—</div>
+            <div class="stat-bar"><div class="stat-bar-fill green" id="statCpuBar" style="width:0%"></div></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">RAM Usage</div>
+            <div class="stat-value" id="statRam">—</div>
+            <div class="stat-sub" id="statRamSub"></div>
+            <div class="stat-bar"><div class="stat-bar-fill green" id="statRamBar" style="width:0%"></div></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Disk Usage</div>
+            <div class="stat-value" id="statDisk">—</div>
+            <div class="stat-sub" id="statDiskSub"></div>
+            <div class="stat-bar"><div class="stat-bar-fill green" id="statDiskBar" style="width:0%"></div></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">CPU Temperature</div>
+            <div class="stat-value" id="statTemp">—</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Uptime</div>
+            <div class="stat-value" id="statUptime">—</div>
+        </div>
     </div>
 </div>
 
@@ -925,6 +1030,82 @@
     }
 
     // ══════════════════════════════════════════════════
+    //  System Stats
+    // ══════════════════════════════════════════════════
+    var statsPanel = document.getElementById('statsPanel');
+    var statsOpen  = false;
+    var statsTimer = null;
+
+    function toggleStatsPanel() {
+        statsOpen = !statsOpen;
+        statsPanel.classList.toggle('open', statsOpen);
+        if (statsOpen) {
+            // Close logs if open
+            if (logOpen) { logOpen = false; logPanel.classList.remove('open'); }
+            fetchStats();
+            statsTimer = setInterval(fetchStats, 5000);
+        } else {
+            if (statsTimer) { clearInterval(statsTimer); statsTimer = null; }
+        }
+    }
+
+    function barColor(pct) {
+        if (pct >= 85) return 'red';
+        if (pct >= 60) return 'yellow';
+        return 'green';
+    }
+
+    function setBar(barEl, pct) {
+        barEl.style.width = pct + '%';
+        barEl.className = 'stat-bar-fill ' + barColor(pct);
+    }
+
+    function fetchStats() {
+        fetch('/api/stats')
+            .then(function(r) { return r.json(); })
+            .then(function(s) {
+                // CPU
+                if (s.cpu_percent !== null) {
+                    document.getElementById('statCpu').textContent = s.cpu_percent + '%';
+                    setBar(document.getElementById('statCpuBar'), s.cpu_percent);
+                } else {
+                    document.getElementById('statCpu').textContent = 'N/A';
+                }
+
+                // RAM
+                if (s.ram_percent !== null) {
+                    document.getElementById('statRam').textContent = s.ram_percent + '%';
+                    document.getElementById('statRamSub').textContent = s.ram_used_mb + ' / ' + s.ram_total_mb + ' MB';
+                    setBar(document.getElementById('statRamBar'), s.ram_percent);
+                } else {
+                    document.getElementById('statRam').textContent = 'N/A';
+                }
+
+                // Disk
+                if (s.disk_percent !== null) {
+                    document.getElementById('statDisk').textContent = s.disk_percent + '%';
+                    document.getElementById('statDiskSub').textContent = s.disk_used_gb + ' / ' + s.disk_total_gb + ' GB';
+                    setBar(document.getElementById('statDiskBar'), s.disk_percent);
+                } else {
+                    document.getElementById('statDisk').textContent = 'N/A';
+                }
+
+                // Temp
+                if (s.cpu_temp !== null) {
+                    var tempColor = s.cpu_temp >= 70 ? 'var(--red)' : s.cpu_temp >= 55 ? '#f0b040' : 'var(--green)';
+                    document.getElementById('statTemp').innerHTML = s.cpu_temp + '°C';
+                    document.getElementById('statTemp').style.color = tempColor;
+                } else {
+                    document.getElementById('statTemp').textContent = 'N/A';
+                }
+
+                // Uptime
+                document.getElementById('statUptime').textContent = s.uptime || 'N/A';
+            })
+            .catch(function() {});
+    }
+
+    // ══════════════════════════════════════════════════
     //  Server Logs
     // ══════════════════════════════════════════════════
     var logPanel      = document.getElementById('logPanel');
@@ -939,7 +1120,11 @@
     function toggleLogPanel() {
         logOpen = !logOpen;
         logPanel.classList.toggle('open', logOpen);
-        if (logOpen) fetchLogs();
+        if (logOpen) {
+            // Close stats if open
+            if (statsOpen) { statsOpen = false; statsPanel.classList.remove('open'); if (statsTimer) { clearInterval(statsTimer); statsTimer = null; } }
+            fetchLogs();
+        }
     }
 
     function toggleAutoScroll() {
