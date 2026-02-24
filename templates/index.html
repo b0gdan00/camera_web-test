@@ -598,7 +598,80 @@
 </div>
 
 <script>
-    // ── Clock
+    // ══════════════════════════════════════════════════
+    //  Auth / Viewers
+    // ══════════════════════════════════════════════════
+    let viewerName = sessionStorage.getItem('viewerName') || '';
+    const loginOverlay = document.getElementById('loginOverlay');
+    const nameInput    = document.getElementById('nameInput');
+    const viewersBar   = document.getElementById('viewersBar');
+
+    nameInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') joinStream();
+    });
+
+    function joinStream() {
+        var name = nameInput.value.trim();
+        if (!name) { nameInput.focus(); return; }
+        viewerName = name;
+        sessionStorage.setItem('viewerName', name);
+
+        fetch('/api/join', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name: name}),
+        }).then(function(r) { return r.json(); })
+          .then(function(data) { renderViewers(data.viewers); })
+          .catch(function() {});
+
+        loginOverlay.classList.add('hidden');
+        document.getElementById('stream').src = '/video_feed';
+    }
+
+    function renderViewers(list) {
+        var html = '<span class="viewers-label">Watching:</span>';
+        for (var i = 0; i < list.length; i++) {
+            html += '<span class="viewer-chip"><span class="viewer-dot"></span>' + list[i] + '</span>';
+        }
+        viewersBar.innerHTML = html;
+    }
+
+    // Heartbeat every 10s
+    setInterval(function() {
+        if (!viewerName) return;
+        fetch('/api/heartbeat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name: viewerName}),
+        }).then(function(r) { return r.json(); })
+          .then(function(data) { renderViewers(data.viewers); })
+          .catch(function() {});
+    }, 10000);
+
+    // Poll viewers every 15s
+    setInterval(function() {
+        if (!viewerName) return;
+        fetch('/api/viewers').then(function(r) { return r.json(); })
+          .then(function(data) { renderViewers(data.viewers); })
+          .catch(function() {});
+    }, 15000);
+
+    // Auto-login if name already saved
+    if (viewerName) {
+        loginOverlay.classList.add('hidden');
+        document.getElementById('stream').src = '/video_feed';
+        fetch('/api/join', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name: viewerName}),
+        }).then(function(r) { return r.json(); })
+          .then(function(data) { renderViewers(data.viewers); })
+          .catch(function() {});
+    }
+
+    // ══════════════════════════════════════════════════
+    //  Clock
+    // ══════════════════════════════════════════════════
     function updateClock() {
         document.getElementById('clock').textContent =
             new Date().toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
@@ -606,12 +679,14 @@
     updateClock();
     setInterval(updateClock, 1000);
 
-    // ── Status
-    const streamImg  = document.getElementById('stream');
-    const badge      = document.getElementById('statusBadge');
-    const statusText = document.getElementById('statusText');
-    const statusCard = document.getElementById('streamStatus');
-    const errorOvl   = document.getElementById('errorOverlay');
+    // ══════════════════════════════════════════════════
+    //  Stream status
+    // ══════════════════════════════════════════════════
+    var streamImg  = document.getElementById('stream');
+    var badge      = document.getElementById('statusBadge');
+    var statusText = document.getElementById('statusText');
+    var statusCard = document.getElementById('streamStatus');
+    var errorOvl   = document.getElementById('errorOverlay');
 
     function setOnline(on) {
         badge.classList.toggle('offline', !on);
@@ -621,20 +696,26 @@
         errorOvl.classList.toggle('visible', !on);
     }
 
-    streamImg.addEventListener('error', () => setOnline(false));
-    streamImg.addEventListener('load',  () => setOnline(true));
-    setInterval(() => {
-        fetch('/snapshot', {method:'HEAD'}).then(r => setOnline(r.ok)).catch(() => setOnline(false));
+    streamImg.addEventListener('error', function() { setOnline(false); });
+    streamImg.addEventListener('load',  function() { setOnline(true); });
+    setInterval(function() {
+        fetch('/snapshot', {method:'HEAD'})
+            .then(function(r) { setOnline(r.ok); })
+            .catch(function() { setOnline(false); });
     }, 5000);
 
-    // ── Settings API
+    // ══════════════════════════════════════════════════
+    //  Camera settings API
+    // ══════════════════════════════════════════════════
     function updateSetting(key, value) {
-        const body = {}; body[key] = value;
+        var body = {}; body[key] = value;
         fetch('/api/settings', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(body),
-        }).then(r => r.json()).then(syncUI).catch(e => console.error('Settings error:', e));
+        }).then(function(r) { return r.json(); })
+          .then(syncUI)
+          .catch(function(e) { console.error('Settings error:', e); });
     }
 
     function syncUI(s) {
@@ -642,40 +723,42 @@
         document.getElementById('qualityVal').textContent = s.jpeg_quality;
         document.getElementById('fpsSlider').value = s.fps;
         document.getElementById('fpsVal').textContent = s.fps;
-        // Update rotation buttons
         if (s.rotation !== undefined) {
-            document.querySelectorAll('.rot-btn').forEach(btn => {
+            document.querySelectorAll('.rot-btn').forEach(function(btn) {
                 btn.classList.toggle('active', parseInt(btn.dataset.rot) === s.rotation);
             });
         }
     }
 
-    fetch('/api/settings').then(r => r.json()).then(syncUI).catch(() => {});
+    fetch('/api/settings').then(function(r) { return r.json(); }).then(syncUI).catch(function() {});
 
-    // ── Rotation
+    // ══════════════════════════════════════════════════
+    //  Rotation
+    // ══════════════════════════════════════════════════
     function setRotation(deg) {
         updateSetting('rotation', deg);
-        // Immediate visual feedback
-        document.querySelectorAll('.rot-btn').forEach(btn => {
+        document.querySelectorAll('.rot-btn').forEach(function(btn) {
             btn.classList.toggle('active', parseInt(btn.dataset.rot) === deg);
         });
     }
 
-    // ── Detection API ────────────────────────────────
-    const detToggle    = document.getElementById('detToggle');
-    const orangeToggle = document.getElementById('orangeToggle');
-    const allObjToggle = document.getElementById('allObjToggle');
-    const detBadge     = document.getElementById('detCountBadge');
-    let detEnabled     = false;
+    // ══════════════════════════════════════════════════
+    //  Detection API
+    // ══════════════════════════════════════════════════
+    var detToggle    = document.getElementById('detToggle');
+    var allObjToggle = document.getElementById('allObjToggle');
+    var detBadge     = document.getElementById('detCountBadge');
+    var detEnabled   = false;
 
     function updateDetection(key, value) {
-        const body = {}; body[key] = value;
+        var body = {}; body[key] = value;
         fetch('/api/detection', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(body),
-        }).then(r => r.json()).then(syncDetectionUI)
-          .catch(e => console.error('Detection error:', e));
+        }).then(function(r) { return r.json(); })
+          .then(syncDetectionUI)
+          .catch(function(e) { console.error('Detection error:', e); });
     }
 
     function toggleDetection() {
@@ -684,14 +767,8 @@
         detToggle.classList.toggle('on', detEnabled);
     }
 
-    function toggleOrangeCat() {
-        const on = !orangeToggle.classList.contains('on');
-        updateDetection('orange_cat_mode', on);
-        orangeToggle.classList.toggle('on', on);
-    }
-
     function toggleAllObjects() {
-        const on = !allObjToggle.classList.contains('on');
+        var on = !allObjToggle.classList.contains('on');
         updateDetection('draw_all_objects', on);
         allObjToggle.classList.toggle('on', on);
     }
@@ -699,7 +776,6 @@
     function syncDetectionUI(s) {
         detEnabled = s.enabled;
         detToggle.classList.toggle('on', s.enabled);
-        orangeToggle.classList.toggle('on', s.orange_cat_mode);
         allObjToggle.classList.toggle('on', s.draw_all_objects);
 
         document.getElementById('confSlider').value = Math.round(s.confidence * 100);
@@ -707,52 +783,43 @@
         document.getElementById('intervalSlider').value = s.detect_interval;
         document.getElementById('intervalVal').textContent = s.detect_interval;
 
-        // Update detection count badge
-        const count = s.detections ? s.detections.length : 0;
+        var count = s.detections ? s.detections.length : 0;
         detBadge.textContent = count + (count === 1 ? ' object' : ' objects');
         detBadge.classList.toggle('empty', count === 0);
-
-        // Show orange cats specially
-        if (s.detections) {
-            const oranges = s.detections.filter(d => d.orange_cat);
-            if (oranges.length > 0) {
-                detBadge.textContent += ' (🐱 ' + oranges.length + ' orange)';
-                detBadge.style.background = 'rgba(255,100,0,.2)';
-            } else {
-                detBadge.style.background = '';
-            }
-        }
     }
 
-    // Initial detection state + periodic poll
-    fetch('/api/detection').then(r => r.json()).then(syncDetectionUI).catch(() => {});
-    setInterval(() => {
+    fetch('/api/detection').then(function(r) { return r.json(); }).then(syncDetectionUI).catch(function() {});
+    setInterval(function() {
         if (detEnabled) {
-            fetch('/api/detection').then(r => r.json()).then(syncDetectionUI).catch(() => {});
+            fetch('/api/detection').then(function(r) { return r.json(); }).then(syncDetectionUI).catch(function() {});
         }
     }, 3000);
 
-    // ── Actions
+    // ══════════════════════════════════════════════════
+    //  Actions
+    // ══════════════════════════════════════════════════
     function takeSnapshot() {
-        const a = document.createElement('a');
+        var a = document.createElement('a');
         a.href = '/snapshot'; a.download = 'snapshot_' + Date.now() + '.jpg'; a.click();
     }
 
     function toggleFullscreen() {
-        const el = document.getElementById('videoWrapper');
-        if (!document.fullscreenElement) el.requestFullscreen().catch(() => {});
+        var el = document.getElementById('videoWrapper');
+        if (!document.fullscreenElement) el.requestFullscreen().catch(function() {});
         else document.exitFullscreen();
     }
 
-    // ── Server Logs ──────────────────────────────────
-    const logPanel    = document.getElementById('logPanel');
-    const logBody     = document.getElementById('logBody');
-    const logCountEl  = document.getElementById('logCount');
-    const autoScrollBtn = document.getElementById('autoScrollBtn');
-    let logAutoScroll = true;
-    let logOpen       = false;
-    let knownLogCount = 0;
-    let logLines      = [];
+    // ══════════════════════════════════════════════════
+    //  Server Logs
+    // ══════════════════════════════════════════════════
+    var logPanel      = document.getElementById('logPanel');
+    var logBody       = document.getElementById('logBody');
+    var logCountEl    = document.getElementById('logCount');
+    var autoScrollBtn = document.getElementById('autoScrollBtn');
+    var logAutoScroll = true;
+    var logOpen       = false;
+    var knownLogCount = 0;
+    var logLines      = [];
 
     function toggleLogPanel() {
         logOpen = !logOpen;
@@ -777,9 +844,9 @@
     }
 
     function getLogLevel(line) {
-        if (line.includes('[ERROR]') || line.includes('[CRITICAL]')) return 'error';
-        if (line.includes('[WARNING]')) return 'warning';
-        if (line.includes('[INFO]')) return 'info';
+        if (line.indexOf('[ERROR]') !== -1 || line.indexOf('[CRITICAL]') !== -1) return 'error';
+        if (line.indexOf('[WARNING]') !== -1) return 'warning';
+        if (line.indexOf('[INFO]') !== -1) return 'info';
         return '';
     }
 
@@ -791,35 +858,31 @@
         }
         logCountEl.textContent = lines.length;
 
-        // Build only new lines for performance
-        const fragment = document.createDocumentFragment();
-        const startIdx = Math.max(0, lines.length - (newCount || lines.length));
+        var fragment = document.createDocumentFragment();
 
-        // If full re-render needed
         if (!newCount || newCount >= lines.length) {
             logBody.innerHTML = '';
-            for (let i = 0; i < lines.length; i++) {
-                const div = document.createElement('div');
+            for (var i = 0; i < lines.length; i++) {
+                var div = document.createElement('div');
                 div.className = 'log-line';
-                const lvl = getLogLevel(lines[i]);
+                var lvl = getLogLevel(lines[i]);
                 if (lvl) div.classList.add('lvl-' + lvl);
                 div.textContent = lines[i];
                 fragment.appendChild(div);
             }
         } else {
-            // Append only new lines
-            for (let i = startIdx; i < lines.length; i++) {
-                const div = document.createElement('div');
-                div.className = 'log-line new-line';
-                const lvl = getLogLevel(lines[i]);
-                if (lvl) div.classList.add('lvl-' + lvl);
-                div.textContent = lines[i];
-                fragment.appendChild(div);
+            var startIdx = Math.max(0, lines.length - newCount);
+            for (var j = startIdx; j < lines.length; j++) {
+                var div2 = document.createElement('div');
+                div2.className = 'log-line new-line';
+                var lvl2 = getLogLevel(lines[j]);
+                if (lvl2) div2.classList.add('lvl-' + lvl2);
+                div2.textContent = lines[j];
+                fragment.appendChild(div2);
             }
         }
         logBody.appendChild(fragment);
 
-        // Trim displayed lines if too many
         while (logBody.children.length > 500) {
             logBody.removeChild(logBody.firstChild);
         }
@@ -829,13 +892,14 @@
 
     function fetchLogs() {
         fetch('/api/logs?n=200')
-            .then(r => r.json())
-            .then(data => {
-                const newLines = data.lines;
-                const newCount = newLines.length - logLines.length;
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var newLines = data.lines;
+                var newCount = newLines.length - logLines.length;
 
-                if (newLines.length !== logLines.length || (newLines.length > 0 && newLines[newLines.length-1] !== logLines[logLines.length-1])) {
-                    const actualNew = newCount > 0 ? newCount : newLines.length;
+                if (newLines.length !== logLines.length ||
+                    (newLines.length > 0 && newLines[newLines.length-1] !== logLines[logLines.length-1])) {
+                    var actualNew = newCount > 0 ? newCount : newLines.length;
                     logLines = newLines;
                     if (actualNew === newLines.length) {
                         renderLogs(logLines);
@@ -845,15 +909,13 @@
                 }
                 knownLogCount = data.total;
             })
-            .catch(() => {});
+            .catch(function() {});
     }
 
-    // Poll logs every 2 seconds
-    setInterval(() => {
+    setInterval(function() {
         if (logOpen) fetchLogs();
     }, 2000);
 
-    // Initial fetch
     fetchLogs();
 </script>
 </body>
