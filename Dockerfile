@@ -1,22 +1,16 @@
 # ── PiCam Stream for Raspberry Pi (ARM64) ────────
 FROM python:3.11-slim-bookworm
 
-# System deps for OpenCV + build tools for ARM
+# System deps for OpenCV (minimal set for headless)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    cmake \
-    pkg-config \
     libgl1 \
     libglib2.0-0 \
     libsm6 \
     libxrender1 \
     libxext6 \
-    libjpeg-dev \
-    libpng-dev \
-    libtiff-dev \
-    libavcodec-dev \
-    libavformat-dev \
-    libswscale-dev \
+    libjpeg62-turbo \
+    libpng16-16 \
+    libtiff6 \
     libv4l-dev \
     v4l-utils \
     curl \
