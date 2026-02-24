@@ -1,521 +1,6 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PiCam Stream — Live</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+{% extends "base.html" %}
 
-        :root {
-            --bg:        #0b0d13;
-            --surface:   #13161f;
-            --surface2:  #1a1e2a;
-            --border:    #232837;
-            --text:      #e2e6f0;
-            --text-dim:  #6b7394;
-            --accent:    #6c8aff;
-            --accent2:   #a96cff;
-            --accent-g:  linear-gradient(135deg, #6c8aff 0%, #a96cff 100%);
-            --red:       #ff4d6a;
-            --green:     #34d399;
-            --radius:    14px;
-            --radius-sm: 8px;
-        }
-
-        body {
-            font-family: 'Inter', system-ui, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-        }
-
-        /* ── Header ──────────────────────────────────── */
-        header {
-            padding: 16px 24px;
-            display: flex; align-items: center; justify-content: space-between;
-            border-bottom: 1px solid var(--border);
-            backdrop-filter: blur(12px);
-            background: rgba(11,13,19,.8);
-            position: sticky; top: 0; z-index: 20;
-        }
-
-        .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.1rem; }
-        .logo-icon {
-            width: 30px; height: 30px;
-            background: var(--accent-g); border-radius: 8px;
-            display: grid; place-items: center;
-        }
-        .logo-icon svg { width: 16px; height: 16px; fill: #fff; }
-
-        .status-badge {
-            display: flex; align-items: center; gap: 6px;
-            font-size: .78rem; font-weight: 500; color: var(--green);
-            background: rgba(52,211,153,.08); padding: 5px 14px;
-            border-radius: 999px; border: 1px solid rgba(52,211,153,.18);
-        }
-        .status-badge.offline { color: var(--red); background: rgba(255,77,106,.08); border-color: rgba(255,77,106,.18); }
-        .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 2s infinite; }
-        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
-
-        /* ── Layout ──────────────────────────────────── */
-        .app-layout {
-            display: grid;
-            grid-template-columns: 1fr 300px;
-            gap: 0;
-            min-height: calc(100vh - 58px);
-        }
-
-        @media (max-width: 860px) {
-            .app-layout { grid-template-columns: 1fr; }
-            .sidebar { border-left: none !important; border-top: 1px solid var(--border); }
-        }
-
-        /* ── Video area ──────────────────────────────── */
-        .video-area {
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
-            padding: 24px; gap: 16px;
-        }
-
-        .video-wrapper {
-            position: relative; width: 100%; max-width: 800px;
-            border-radius: var(--radius); overflow: hidden;
-            border: 1px solid var(--border); background: #000;
-            box-shadow: 0 20px 60px rgba(0,0,0,.4), 0 0 80px rgba(108,138,255,.05);
-            transition: box-shadow .4s;
-        }
-        .video-wrapper:hover { box-shadow: 0 24px 70px rgba(0,0,0,.55), 0 0 100px rgba(108,138,255,.1); }
-
-        .video-wrapper img {
-            display: block; width: 100%; height: auto;
-            aspect-ratio: 4/3; object-fit: contain; background: #000;
-        }
-
-        .live-pill {
-            position: absolute; top: 12px; left: 12px; z-index: 3;
-            background: var(--red); color: #fff;
-            font-size: .65rem; font-weight: 700; letter-spacing: .06em;
-            text-transform: uppercase; padding: 3px 10px; border-radius: 6px;
-            display: flex; align-items: center; gap: 5px;
-            box-shadow: 0 2px 10px rgba(255,77,106,.4);
-        }
-        .live-pill .dot { width: 5px; height: 5px; background: #fff; border-radius: 50%; animation: pulse 1.4s infinite; }
-
-        .timestamp {
-            position: absolute; top: 12px; right: 12px; z-index: 3;
-            font-size: .68rem; font-weight: 500; color: rgba(255,255,255,.7);
-            background: rgba(0,0,0,.55); backdrop-filter: blur(6px);
-            padding: 3px 10px; border-radius: 6px;
-        }
-
-        .error-overlay {
-            position: absolute; inset: 0; display: none;
-            flex-direction: column; justify-content: center; align-items: center; gap: 8px;
-            background: rgba(11,13,19,.88); backdrop-filter: blur(6px);
-            color: var(--red); font-weight: 600; font-size: .95rem; z-index: 5;
-        }
-        .error-overlay.visible { display: flex; }
-
-        /* action bar */
-        .action-bar { display: flex; gap: 8px; width: 100%; max-width: 800px; }
-        .btn {
-            font-family: inherit; font-size: .78rem; font-weight: 600;
-            border: none; padding: 8px 16px; border-radius: var(--radius-sm);
-            cursor: pointer; display: flex; align-items: center; gap: 6px;
-            transition: transform .12s, box-shadow .2s, background .2s; color: #fff;
-        }
-        .btn:active { transform: scale(.96); }
-        .btn svg { width: 14px; height: 14px; fill: currentColor; }
-        .btn-primary { background: var(--accent-g); box-shadow: 0 4px 16px rgba(108,138,255,.3); }
-        .btn-ghost { background: var(--surface2); border: 1px solid var(--border); }
-        .btn-ghost:hover { background: var(--border); }
-
-        /* ── Sidebar ─────────────────────────────────── */
-        .sidebar {
-            border-left: 1px solid var(--border);
-            background: var(--surface);
-            padding: 20px;
-            display: flex; flex-direction: column; gap: 20px;
-            overflow-y: auto;
-        }
-
-        .panel-title {
-            font-size: .7rem; font-weight: 700; text-transform: uppercase;
-            letter-spacing: .08em; color: var(--text-dim); margin-bottom: 10px;
-        }
-
-        .panel { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
-
-        /* range slider */
-        .slider-row { margin-top: 0; }
-        .slider-row + .slider-row { margin-top: 16px; }
-
-        .slider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-        .slider-label { font-size: .82rem; font-weight: 500; }
-        .slider-value {
-            font-size: .78rem; font-weight: 700; color: var(--accent);
-            background: rgba(108,138,255,.1); padding: 2px 8px; border-radius: 4px;
-        }
-
-        input[type="range"] {
-            -webkit-appearance: none; appearance: none;
-            width: 100%; height: 6px; border-radius: 3px;
-            background: var(--border); outline: none;
-        }
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none; appearance: none;
-            width: 18px; height: 18px; border-radius: 50%;
-            background: var(--accent); cursor: pointer;
-            box-shadow: 0 0 8px rgba(108,138,255,.4);
-            border: 2px solid var(--surface);
-        }
-        input[type="range"]::-moz-range-thumb {
-            width: 18px; height: 18px; border-radius: 50%;
-            background: var(--accent); cursor: pointer;
-            box-shadow: 0 0 8px rgba(108,138,255,.4);
-            border: 2px solid var(--surface);
-        }
-
-        /* info cards */
-        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-        .info-card {
-            background: var(--surface); border: 1px solid var(--border);
-            border-radius: var(--radius-sm); padding: 10px 12px;
-        }
-        .info-card .lbl { font-size: .65rem; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; }
-        .info-card .val { font-size: 1rem; font-weight: 700; margin-top: 2px; }
-
-        footer {
-            padding: 14px 24px; font-size: .7rem; color: var(--text-dim);
-            text-align: center; border-top: 1px solid var(--border);
-            grid-column: 1 / -1;
-        }
-
-        /* ── Log Panel ───────────────────────────────── */
-        .log-panel {
-            position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
-            transform: translateY(100%);
-            transition: transform .35s cubic-bezier(.4,0,.2,1);
-        }
-        .log-panel.open { transform: translateY(0); }
-
-        .log-header {
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 10px 20px;
-            background: linear-gradient(135deg, #1a1e2a 0%, #13161f 100%);
-            border-top: 1px solid var(--border);
-            cursor: pointer; user-select: none;
-        }
-        .log-header:hover { background: #1e2233; }
-        .log-header-left { display: flex; align-items: center; gap: 8px; }
-        .log-header-title {
-            font-size: .78rem; font-weight: 700; text-transform: uppercase;
-            letter-spacing: .06em; color: var(--text-dim);
-        }
-        .log-count {
-            font-size: .65rem; font-weight: 600;
-            background: rgba(108,138,255,.15); color: var(--accent);
-            padding: 2px 8px; border-radius: 999px;
-        }
-        .log-toggle-icon {
-            width: 20px; height: 20px; fill: var(--text-dim);
-            transition: transform .3s;
-        }
-        .log-panel.open .log-toggle-icon { transform: rotate(180deg); }
-
-        .log-body {
-            height: 220px;
-            overflow-y: auto; overflow-x: hidden;
-            background: #0a0c10;
-            padding: 8px 16px;
-            font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
-            font-size: .72rem; line-height: 1.6;
-        }
-        .log-body::-webkit-scrollbar { width: 6px; }
-        .log-body::-webkit-scrollbar-track { background: transparent; }
-        .log-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-
-        .log-line {
-            white-space: pre-wrap; word-break: break-all;
-            padding: 1px 0; color: #8b93a8;
-            border-left: 2px solid transparent; padding-left: 8px;
-            transition: background .15s;
-        }
-        .log-line:hover { background: rgba(255,255,255,.03); }
-        .log-line.lvl-error { color: #ff6b82; border-left-color: #ff4d6a; }
-        .log-line.lvl-warning { color: #f0b040; border-left-color: #f0b040; }
-        .log-line.lvl-info { color: #7ec8e3; border-left-color: #6c8aff; }
-        .log-line.new-line { animation: logFlash .6s ease-out; }
-        @keyframes logFlash { from { background: rgba(108,138,255,.12); } to { background: transparent; } }
-
-        .log-empty {
-            color: var(--text-dim); font-style: italic;
-            padding: 40px 0; text-align: center;
-        }
-
-        .log-controls {
-            display: flex; gap: 6px; align-items: center;
-        }
-        .log-btn {
-            font-family: inherit; font-size: .68rem; font-weight: 600;
-            background: var(--surface2); color: var(--text-dim);
-            border: 1px solid var(--border); border-radius: 6px;
-            padding: 4px 10px; cursor: pointer;
-            transition: background .2s, color .2s;
-        }
-        .log-btn:hover { background: var(--border); color: var(--text); }
-        .log-btn.active { background: rgba(108,138,255,.15); color: var(--accent); border-color: rgba(108,138,255,.3); }
-
-        /* ── Rotation buttons ───────────────────────── */
-        .rotation-group {
-            display: flex; gap: 6px; flex-wrap: wrap;
-        }
-        .rot-btn {
-            flex: 1; min-width: 55px;
-            font-family: inherit; font-size: .72rem; font-weight: 600;
-            background: var(--surface); color: var(--text-dim);
-            border: 1px solid var(--border); border-radius: var(--radius-sm);
-            padding: 8px 6px; cursor: pointer;
-            display: flex; flex-direction: column; align-items: center; gap: 4px;
-            transition: all .2s;
-        }
-        .rot-btn:hover { background: var(--border); color: var(--text); }
-        .rot-btn.active {
-            background: rgba(108,138,255,.12); color: var(--accent);
-            border-color: rgba(108,138,255,.35);
-            box-shadow: 0 0 12px rgba(108,138,255,.15);
-        }
-        .rot-btn svg { width: 18px; height: 18px; fill: currentColor; }
-
-        /* ── Toggle switch ──────────────────────────── */
-        .toggle-row {
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 6px 0;
-        }
-        .toggle-row + .toggle-row { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 10px; }
-        .toggle-label { font-size: .8rem; font-weight: 500; }
-        .toggle-sub { font-size: .65rem; color: var(--text-dim); margin-top: 1px; }
-        .toggle {
-            position: relative; width: 40px; height: 22px;
-            background: var(--border); border-radius: 11px;
-            cursor: pointer; transition: background .25s;
-            flex-shrink: 0;
-        }
-        .toggle.on { background: var(--accent); }
-        .toggle::after {
-            content: ''; position: absolute; top: 3px; left: 3px;
-            width: 16px; height: 16px; border-radius: 50%;
-            background: #fff; transition: transform .25s;
-            box-shadow: 0 1px 4px rgba(0,0,0,.3);
-        }
-        .toggle.on::after { transform: translateX(18px); }
-
-        /* Detection badge */
-        .det-count-badge {
-            display: inline-flex; align-items: center; gap: 4px;
-            font-size: .65rem; font-weight: 700;
-            padding: 2px 8px; border-radius: 999px;
-            background: rgba(255,140,0,.12); color: #ff8c00;
-            margin-left: 6px;
-        }
-        .det-count-badge.empty { opacity: .4; }
-
-        /* ── Login overlay ─────────────────────────── */
-        .login-overlay {
-            position: fixed; inset: 0; z-index: 100;
-            background: var(--bg);
-            display: flex; align-items: center; justify-content: center;
-            transition: opacity .4s, visibility .4s;
-        }
-        .login-overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
-
-        .login-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 40px 36px;
-            width: 340px; max-width: 90vw;
-            text-align: center;
-            box-shadow: 0 30px 80px rgba(0,0,0,.5), 0 0 120px rgba(108,138,255,.06);
-        }
-        .login-card .logo-icon {
-            width: 56px; height: 56px; margin: 0 auto 16px;
-            border-radius: 14px;
-        }
-        .login-card .logo-icon svg { width: 28px; height: 28px; }
-        .login-card h2 { font-size: 1.2rem; font-weight: 700; margin-bottom: 4px; }
-        .login-card p { font-size: .82rem; color: var(--text-dim); margin-bottom: 20px; }
-
-        .login-input {
-            width: 100%; padding: 12px 16px;
-            font-family: inherit; font-size: .9rem; font-weight: 500;
-            background: var(--surface2); color: var(--text);
-            border: 1px solid var(--border); border-radius: 10px;
-            outline: none; transition: border-color .2s;
-        }
-        .login-input:focus { border-color: var(--accent); }
-        .login-input::placeholder { color: var(--text-dim); }
-
-        .login-btn {
-            width: 100%; margin-top: 12px;
-            padding: 12px; font-family: inherit;
-            font-size: .88rem; font-weight: 700; color: #fff;
-            background: var(--accent-g); border: none;
-            border-radius: 10px; cursor: pointer;
-            box-shadow: 0 4px 20px rgba(108,138,255,.3);
-            transition: transform .12s, box-shadow .2s;
-        }
-        .login-btn:hover { box-shadow: 0 6px 28px rgba(108,138,255,.4); }
-        .login-btn:active { transform: scale(.97); }
-
-        /* ── Viewers bar ───────────────────────────── */
-        .header-center {
-            display: flex; align-items: center; gap: 8px;
-            flex: 1; justify-content: center;
-            overflow-x: auto; padding: 0 12px;
-            position: relative;
-        }
-        .viewers-label {
-            font-size: .68rem; font-weight: 600; color: var(--text-dim);
-            text-transform: uppercase; letter-spacing: .04em;
-            white-space: nowrap;
-        }
-        .viewer-chip {
-            display: inline-flex; align-items: center; gap: 4px;
-            font-size: .72rem; font-weight: 600;
-            padding: 3px 10px; border-radius: 999px;
-            background: rgba(108,138,255,.1); color: var(--accent);
-            border: 1px solid rgba(108,138,255,.2);
-            white-space: nowrap;
-            animation: chipIn .3s ease-out;
-        }
-        .viewer-chip .viewer-dot {
-            width: 5px; height: 5px; border-radius: 50%;
-            background: var(--green); animation: pulse 2s infinite;
-        }
-        @keyframes chipIn { from { opacity: 0; transform: scale(.8); } to { opacity: 1; transform: scale(1); } }
-
-        /* Viewers dropdown toggle (mobile) */
-        .viewers-toggle {
-            display: none;
-            font-family: inherit; font-size: .72rem; font-weight: 600;
-            padding: 4px 12px; border-radius: 999px;
-            background: rgba(108,138,255,.1); color: var(--accent);
-            border: 1px solid rgba(108,138,255,.2);
-            cursor: pointer; transition: background .2s;
-            white-space: nowrap;
-        }
-        .viewers-toggle:hover { background: rgba(108,138,255,.18); }
-        .viewers-toggle svg { width: 12px; height: 12px; fill: currentColor; vertical-align: -1px; margin-right: 3px; }
-
-        .viewers-dropdown {
-            display: none; position: absolute;
-            top: calc(100% + 8px); left: 50%; transform: translateX(-50%);
-            min-width: 180px; max-width: 280px;
-            background: var(--surface); border: 1px solid var(--border);
-            border-radius: 12px; padding: 10px 12px;
-            box-shadow: 0 12px 40px rgba(0,0,0,.5);
-            z-index: 30;
-            flex-direction: column; gap: 6px;
-        }
-        .viewers-dropdown.open { display: flex; }
-        .viewers-dropdown .viewer-chip { width: 100%; justify-content: flex-start; }
-        .viewers-dropdown-title {
-            font-size: .6rem; font-weight: 700; color: var(--text-dim);
-            text-transform: uppercase; letter-spacing: .06em; margin-bottom: 2px;
-        }
-
-        /* Desktop: inline chips, hide toggle */
-        .viewers-inline { display: contents; }
-
-        /* Mobile: hide inline, show toggle */
-        @media (max-width: 860px) {
-            .viewers-inline { display: none !important; }
-            .viewers-toggle { display: inline-flex; align-items: center; }
-            .header-center { overflow: visible; }
-        }
-
-        /* Leave button */
-        .leave-btn {
-            font-family: inherit; font-size: .7rem; font-weight: 600;
-            padding: 5px 12px; border-radius: 8px;
-            background: rgba(255,77,106,.1); color: var(--red);
-            border: 1px solid rgba(255,77,106,.2);
-            cursor: pointer; transition: background .2s;
-            white-space: nowrap; margin-left: 8px;
-        }
-        .leave-btn:hover { background: rgba(255,77,106,.2); }
-        .leave-btn svg { width: 12px; height: 12px; fill: currentColor; vertical-align: -1px; margin-right: 3px; }
-
-        /* ── Stats Panel ──────────────────────────── */
-        .stats-panel {
-            position: fixed; bottom: 0; left: 0; right: 0; z-index: 49;
-            transform: translateY(100%);
-            transition: transform .35s cubic-bezier(.4,0,.2,1);
-        }
-        .stats-panel.open { transform: translateY(0); }
-
-        .stats-header {
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 10px 20px;
-            background: linear-gradient(135deg, #1a1e2a 0%, #13161f 100%);
-            border-top: 1px solid var(--border);
-            cursor: pointer; user-select: none;
-        }
-        .stats-header:hover { background: #1e2233; }
-        .stats-header-left { display: flex; align-items: center; gap: 8px; }
-        .stats-header-title {
-            font-size: .78rem; font-weight: 700; text-transform: uppercase;
-            letter-spacing: .06em; color: var(--text-dim);
-        }
-        .stats-toggle-icon {
-            width: 20px; height: 20px; fill: var(--text-dim);
-            transition: transform .3s;
-        }
-        .stats-panel.open .stats-toggle-icon { transform: rotate(180deg); }
-
-        .stats-body {
-            background: #0a0c10;
-            padding: 16px 20px;
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-            gap: 12px;
-        }
-        .stat-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 12px 14px;
-        }
-        .stat-card .stat-label {
-            font-size: .62rem; font-weight: 700;
-            text-transform: uppercase; letter-spacing: .06em;
-            color: var(--text-dim); margin-bottom: 6px;
-        }
-        .stat-card .stat-value {
-            font-size: 1.2rem; font-weight: 800;
-            margin-bottom: 6px;
-        }
-        .stat-card .stat-sub {
-            font-size: .65rem; color: var(--text-dim);
-        }
-        .stat-bar {
-            width: 100%; height: 4px; border-radius: 2px;
-            background: var(--border); margin-top: 6px; overflow: hidden;
-        }
-        .stat-bar-fill {
-            height: 100%; border-radius: 2px;
-            transition: width .5s ease-out;
-        }
-        .stat-bar-fill.green { background: var(--green); }
-        .stat-bar-fill.yellow { background: #f0b040; }
-        .stat-bar-fill.red { background: var(--red); }
-    </style>
-</head>
-<body>
+{% block body %}
 
 <header>
     <div class="logo">
@@ -536,7 +21,7 @@
             <div id="viewersDropdownList"></div>
         </div>
     </div>
-    <div style="display:flex;align-items:center;gap:6px">
+    <div class="header-right">
         <div class="status-badge" id="statusBadge">
             <span class="status-dot"></span>
             <span id="statusText">Connected</span>
@@ -549,7 +34,7 @@
 </header>
 
 <div class="app-layout">
-    <!-- ── Video ────────────────────────────── -->
+    {# ── Video ────────────────────────────── #}
     <div class="video-area">
         <div class="video-wrapper" id="videoWrapper">
             <div class="live-pill"><span class="dot"></span> Live</div>
@@ -564,26 +49,26 @@
         <div class="action-bar">
             <button class="btn btn-primary" onclick="takeSnapshot()">
                 <svg viewBox="0 0 24 24"><path d="M19 5h-2.6l-1.2-1.4c-.2-.3-.6-.6-1-.6H9.8c-.4 0-.8.2-1 .6L7.6 5H5c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-7 13c-2.8 0-5-2.2-5-5s2.2-5 5-5 5 2.2 5 5-2.2 5-5 5zm0-8c-1.7 0-3 1.3-3 3s1.3 3 3 3 3-1.3 3-3-1.3-3-3-3z"/></svg>
-                Snapshot
+                <span class="btn-text">Snapshot</span>
             </button>
             <button class="btn btn-ghost" onclick="toggleFullscreen()">
                 <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
-                Full screen
+                <span class="btn-text">Full screen</span>
             </button>
             <button class="btn btn-ghost" onclick="toggleLogPanel()" id="logToggleBtn">
                 <svg viewBox="0 0 24 24"><path d="M20 6h-1v8c0 .55-.45 1-1 1H6v1c0 1.1.9 2 2 2h10l4 4V8c0-1.1-.9-2-2-2zm-3 5V4c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v13l4-4h9c1.1 0 2-.9 2-2z"/></svg>
-                Server Logs
+                <span class="btn-text">Logs</span>
             </button>
             <button class="btn btn-ghost" onclick="toggleStatsPanel()" id="statsToggleBtn">
                 <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
-                System Stats
+                <span class="btn-text">Stats</span>
             </button>
         </div>
     </div>
 
-    <!-- ── Sidebar ──────────────────────────── -->
+    {# ── Sidebar ──────────────────────────── #}
     <div class="sidebar">
-        <!-- Camera settings -->
+        {# Camera settings #}
         <div>
             <div class="panel-title">Camera Settings</div>
             <div class="panel">
@@ -608,7 +93,7 @@
             </div>
         </div>
 
-        <!-- Rotation -->
+        {# Rotation #}
         <div>
             <div class="panel-title">Rotation</div>
             <div class="panel">
@@ -633,7 +118,7 @@
             </div>
         </div>
 
-        <!-- Detection -->
+        {# Detection #}
         <div>
             <div class="panel-title">
                 Object Detection
@@ -675,13 +160,13 @@
             </div>
         </div>
 
-        <!-- Info -->
+        {# Info #}
         <div>
             <div class="panel-title">Info</div>
             <div class="info-grid">
                 <div class="info-card">
                     <div class="lbl">Resolution</div>
-                    <div class="val">640x480</div>
+                    <div class="val">640×480</div>
                 </div>
                 <div class="info-card">
                     <div class="lbl">Format</div>
@@ -702,7 +187,7 @@
     <footer>PiCam Stream &middot; Raspberry Pi &middot; Flask + OpenCV</footer>
 </div>
 
-<!-- ── Login Overlay ────────────────────────── -->
+{# ── Login Overlay ────────────────────────── #}
 <div class="login-overlay" id="loginOverlay">
     <div class="login-card">
         <div class="logo-icon">
@@ -715,7 +200,7 @@
     </div>
 </div>
 
-<!-- ── Server Log Panel ───────────────────────── -->
+{# ── Server Log Panel ───────────────────────── #}
 <div class="log-panel" id="logPanel">
     <div class="log-header" onclick="toggleLogPanel()">
         <div class="log-header-left">
@@ -733,7 +218,7 @@
     </div>
 </div>
 
-<!-- ── System Stats Panel ────────────────────── -->
+{# ── System Stats Panel ────────────────────── #}
 <div class="stats-panel" id="statsPanel">
     <div class="stats-header" onclick="toggleStatsPanel()">
         <div class="stats-header-left">
@@ -770,453 +255,8 @@
     </div>
 </div>
 
-<script>
-    // ══════════════════════════════════════════════════
-    //  Auth / Viewers
-    // ══════════════════════════════════════════════════
-    var viewerName = sessionStorage.getItem('viewerName') || '';
-    var loginOverlay    = document.getElementById('loginOverlay');
-    var nameInput       = document.getElementById('nameInput');
-    var viewersInline   = document.getElementById('viewersInline');
-    var viewersToggle   = document.getElementById('viewersToggle');
-    var viewersCount    = document.getElementById('viewersCount');
-    var viewersDropdown = document.getElementById('viewersDropdown');
-    var viewersDropdownList = document.getElementById('viewersDropdownList');
-    var leaveBtn        = document.getElementById('leaveBtn');
+{% endblock %}
 
-    nameInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') joinStream();
-    });
-
-    function showLeaveBtn(show) {
-        leaveBtn.style.display = show ? 'inline-flex' : 'none';
-    }
-
-    function joinStream() {
-        var name = nameInput.value.trim();
-        if (!name) { nameInput.focus(); return; }
-        viewerName = name;
-        sessionStorage.setItem('viewerName', name);
-
-        fetch('/api/join', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({name: name}),
-        }).then(function(r) { return r.json(); })
-          .then(function(data) { renderViewers(data.viewers); })
-          .catch(function() {});
-
-        loginOverlay.classList.add('hidden');
-        document.getElementById('stream').src = '/video_feed';
-        showLeaveBtn(true);
-    }
-
-    function leaveStream() {
-        if (!viewerName) return;
-        fetch('/api/leave', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({name: viewerName}),
-        }).then(function(r) { return r.json(); })
-          .then(function(data) { renderViewers(data.viewers); })
-          .catch(function() {});
-
-        viewerName = '';
-        sessionStorage.removeItem('viewerName');
-        document.getElementById('stream').src = '';
-        loginOverlay.classList.remove('hidden');
-        nameInput.value = '';
-        showLeaveBtn(false);
-    }
-
-    function renderViewers(list) {
-        // Inline chips (desktop)
-        var chips = '';
-        for (var i = 0; i < list.length; i++) {
-            chips += '<span class="viewer-chip"><span class="viewer-dot"></span>' + list[i] + '</span>';
-        }
-        viewersInline.innerHTML = chips;
-
-        // Dropdown list (mobile)
-        viewersDropdownList.innerHTML = chips;
-
-        // Update count on toggle button
-        viewersCount.textContent = list.length;
-    }
-
-    function toggleViewersDropdown() {
-        viewersDropdown.classList.toggle('open');
-    }
-
-    // Close dropdown when clicking outside
-    document.addEventListener('click', function(e) {
-        if (!viewersToggle.contains(e.target) && !viewersDropdown.contains(e.target)) {
-            viewersDropdown.classList.remove('open');
-        }
-    });
-
-    // Heartbeat every 10s
-    setInterval(function() {
-        if (!viewerName) return;
-        fetch('/api/heartbeat', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({name: viewerName}),
-        }).then(function(r) { return r.json(); })
-          .then(function(data) { renderViewers(data.viewers); })
-          .catch(function() {});
-    }, 10000);
-
-    // Poll viewers every 15s
-    setInterval(function() {
-        if (!viewerName) return;
-        fetch('/api/viewers').then(function(r) { return r.json(); })
-          .then(function(data) { renderViewers(data.viewers); })
-          .catch(function() {});
-    }, 15000);
-
-    // Auto-login if name already saved
-    if (viewerName) {
-        loginOverlay.classList.add('hidden');
-        document.getElementById('stream').src = '/video_feed';
-        showLeaveBtn(true);
-        fetch('/api/join', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({name: viewerName}),
-        }).then(function(r) { return r.json(); })
-          .then(function(data) { renderViewers(data.viewers); })
-          .catch(function() {});
-    }
-
-    // ══════════════════════════════════════════════════
-    //  Clock
-    // ══════════════════════════════════════════════════
-    function updateClock() {
-        document.getElementById('clock').textContent =
-            new Date().toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
-    }
-    updateClock();
-    setInterval(updateClock, 1000);
-
-    // ══════════════════════════════════════════════════
-    //  Stream status
-    // ══════════════════════════════════════════════════
-    var streamImg  = document.getElementById('stream');
-    var badge      = document.getElementById('statusBadge');
-    var statusText = document.getElementById('statusText');
-    var statusCard = document.getElementById('streamStatus');
-    var errorOvl   = document.getElementById('errorOverlay');
-
-    function setOnline(on) {
-        badge.classList.toggle('offline', !on);
-        statusText.textContent = on ? 'Connected' : 'Disconnected';
-        statusCard.textContent = on ? 'Online' : 'Offline';
-        statusCard.style.color = on ? 'var(--green)' : 'var(--red)';
-        errorOvl.classList.toggle('visible', !on);
-    }
-
-    streamImg.addEventListener('error', function() { setOnline(false); });
-    streamImg.addEventListener('load',  function() { setOnline(true); });
-    setInterval(function() {
-        fetch('/snapshot', {method:'HEAD'})
-            .then(function(r) { setOnline(r.ok); })
-            .catch(function() { setOnline(false); });
-    }, 5000);
-
-    // ══════════════════════════════════════════════════
-    //  Camera settings API
-    // ══════════════════════════════════════════════════
-    function updateSetting(key, value) {
-        var body = {}; body[key] = value;
-        fetch('/api/settings', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(body),
-        }).then(function(r) { return r.json(); })
-          .then(syncUI)
-          .catch(function(e) { console.error('Settings error:', e); });
-    }
-
-    function syncUI(s) {
-        document.getElementById('qualitySlider').value = s.jpeg_quality;
-        document.getElementById('qualityVal').textContent = s.jpeg_quality;
-        document.getElementById('fpsSlider').value = s.fps;
-        document.getElementById('fpsVal').textContent = s.fps;
-        if (s.rotation !== undefined) {
-            document.querySelectorAll('.rot-btn').forEach(function(btn) {
-                btn.classList.toggle('active', parseInt(btn.dataset.rot) === s.rotation);
-            });
-        }
-    }
-
-    fetch('/api/settings').then(function(r) { return r.json(); }).then(syncUI).catch(function() {});
-
-    // ══════════════════════════════════════════════════
-    //  Rotation
-    // ══════════════════════════════════════════════════
-    function setRotation(deg) {
-        updateSetting('rotation', deg);
-        document.querySelectorAll('.rot-btn').forEach(function(btn) {
-            btn.classList.toggle('active', parseInt(btn.dataset.rot) === deg);
-        });
-    }
-
-    // ══════════════════════════════════════════════════
-    //  Detection API
-    // ══════════════════════════════════════════════════
-    var detToggle    = document.getElementById('detToggle');
-    var allObjToggle = document.getElementById('allObjToggle');
-    var detBadge     = document.getElementById('detCountBadge');
-    var detEnabled   = false;
-
-    function updateDetection(key, value) {
-        var body = {}; body[key] = value;
-        fetch('/api/detection', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(body),
-        }).then(function(r) { return r.json(); })
-          .then(syncDetectionUI)
-          .catch(function(e) { console.error('Detection error:', e); });
-    }
-
-    function toggleDetection() {
-        detEnabled = !detEnabled;
-        updateDetection('enabled', detEnabled);
-        detToggle.classList.toggle('on', detEnabled);
-    }
-
-    function toggleAllObjects() {
-        var on = !allObjToggle.classList.contains('on');
-        updateDetection('draw_all_objects', on);
-        allObjToggle.classList.toggle('on', on);
-    }
-
-    function syncDetectionUI(s) {
-        detEnabled = s.enabled;
-        detToggle.classList.toggle('on', s.enabled);
-        allObjToggle.classList.toggle('on', s.draw_all_objects);
-
-        document.getElementById('confSlider').value = Math.round(s.confidence * 100);
-        document.getElementById('confVal').textContent = Math.round(s.confidence * 100) + '%';
-        document.getElementById('intervalSlider').value = s.detect_interval;
-        document.getElementById('intervalVal').textContent = s.detect_interval;
-
-        var count = s.detections ? s.detections.length : 0;
-        detBadge.textContent = count + (count === 1 ? ' object' : ' objects');
-        detBadge.classList.toggle('empty', count === 0);
-    }
-
-    fetch('/api/detection').then(function(r) { return r.json(); }).then(syncDetectionUI).catch(function() {});
-    setInterval(function() {
-        if (detEnabled) {
-            fetch('/api/detection').then(function(r) { return r.json(); }).then(syncDetectionUI).catch(function() {});
-        }
-    }, 3000);
-
-    // ══════════════════════════════════════════════════
-    //  Actions
-    // ══════════════════════════════════════════════════
-    function takeSnapshot() {
-        var a = document.createElement('a');
-        a.href = '/snapshot'; a.download = 'snapshot_' + Date.now() + '.jpg'; a.click();
-    }
-
-    function toggleFullscreen() {
-        var el = document.getElementById('videoWrapper');
-        if (!document.fullscreenElement) el.requestFullscreen().catch(function() {});
-        else document.exitFullscreen();
-    }
-
-    // ══════════════════════════════════════════════════
-    //  System Stats
-    // ══════════════════════════════════════════════════
-    var statsPanel = document.getElementById('statsPanel');
-    var statsOpen  = false;
-    var statsTimer = null;
-
-    function toggleStatsPanel() {
-        statsOpen = !statsOpen;
-        statsPanel.classList.toggle('open', statsOpen);
-        if (statsOpen) {
-            // Close logs if open
-            if (logOpen) { logOpen = false; logPanel.classList.remove('open'); }
-            fetchStats();
-            statsTimer = setInterval(fetchStats, 5000);
-        } else {
-            if (statsTimer) { clearInterval(statsTimer); statsTimer = null; }
-        }
-    }
-
-    function barColor(pct) {
-        if (pct >= 85) return 'red';
-        if (pct >= 60) return 'yellow';
-        return 'green';
-    }
-
-    function setBar(barEl, pct) {
-        barEl.style.width = pct + '%';
-        barEl.className = 'stat-bar-fill ' + barColor(pct);
-    }
-
-    function fetchStats() {
-        fetch('/api/stats')
-            .then(function(r) { return r.json(); })
-            .then(function(s) {
-                // CPU
-                if (s.cpu_percent !== null) {
-                    document.getElementById('statCpu').textContent = s.cpu_percent + '%';
-                    setBar(document.getElementById('statCpuBar'), s.cpu_percent);
-                } else {
-                    document.getElementById('statCpu').textContent = 'N/A';
-                }
-
-                // RAM
-                if (s.ram_percent !== null) {
-                    document.getElementById('statRam').textContent = s.ram_percent + '%';
-                    document.getElementById('statRamSub').textContent = s.ram_used_mb + ' / ' + s.ram_total_mb + ' MB';
-                    setBar(document.getElementById('statRamBar'), s.ram_percent);
-                } else {
-                    document.getElementById('statRam').textContent = 'N/A';
-                }
-
-                // Disk
-                if (s.disk_percent !== null) {
-                    document.getElementById('statDisk').textContent = s.disk_percent + '%';
-                    document.getElementById('statDiskSub').textContent = s.disk_used_gb + ' / ' + s.disk_total_gb + ' GB';
-                    setBar(document.getElementById('statDiskBar'), s.disk_percent);
-                } else {
-                    document.getElementById('statDisk').textContent = 'N/A';
-                }
-
-                // Temp
-                if (s.cpu_temp !== null) {
-                    var tempColor = s.cpu_temp >= 70 ? 'var(--red)' : s.cpu_temp >= 55 ? '#f0b040' : 'var(--green)';
-                    document.getElementById('statTemp').innerHTML = s.cpu_temp + '°C';
-                    document.getElementById('statTemp').style.color = tempColor;
-                } else {
-                    document.getElementById('statTemp').textContent = 'N/A';
-                }
-
-                // Uptime
-                document.getElementById('statUptime').textContent = s.uptime || 'N/A';
-            })
-            .catch(function() {});
-    }
-
-    // ══════════════════════════════════════════════════
-    //  Server Logs
-    // ══════════════════════════════════════════════════
-    var logPanel      = document.getElementById('logPanel');
-    var logBody       = document.getElementById('logBody');
-    var logCountEl    = document.getElementById('logCount');
-    var autoScrollBtn = document.getElementById('autoScrollBtn');
-    var logAutoScroll = true;
-    var logOpen       = false;
-    var knownLogCount = 0;
-    var logLines      = [];
-
-    function toggleLogPanel() {
-        logOpen = !logOpen;
-        logPanel.classList.toggle('open', logOpen);
-        if (logOpen) {
-            // Close stats if open
-            if (statsOpen) { statsOpen = false; statsPanel.classList.remove('open'); if (statsTimer) { clearInterval(statsTimer); statsTimer = null; } }
-            fetchLogs();
-        }
-    }
-
-    function toggleAutoScroll() {
-        logAutoScroll = !logAutoScroll;
-        autoScrollBtn.classList.toggle('active', logAutoScroll);
-        if (logAutoScroll) scrollLogToBottom();
-    }
-
-    function clearLogs() {
-        logLines = [];
-        knownLogCount = 0;
-        renderLogs([]);
-    }
-
-    function scrollLogToBottom() {
-        logBody.scrollTop = logBody.scrollHeight;
-    }
-
-    function getLogLevel(line) {
-        if (line.indexOf('[ERROR]') !== -1 || line.indexOf('[CRITICAL]') !== -1) return 'error';
-        if (line.indexOf('[WARNING]') !== -1) return 'warning';
-        if (line.indexOf('[INFO]') !== -1) return 'info';
-        return '';
-    }
-
-    function renderLogs(lines, newCount) {
-        if (lines.length === 0) {
-            logBody.innerHTML = '<div class="log-empty">No logs yet...</div>';
-            logCountEl.textContent = '0';
-            return;
-        }
-        logCountEl.textContent = lines.length;
-
-        var fragment = document.createDocumentFragment();
-
-        if (!newCount || newCount >= lines.length) {
-            logBody.innerHTML = '';
-            for (var i = 0; i < lines.length; i++) {
-                var div = document.createElement('div');
-                div.className = 'log-line';
-                var lvl = getLogLevel(lines[i]);
-                if (lvl) div.classList.add('lvl-' + lvl);
-                div.textContent = lines[i];
-                fragment.appendChild(div);
-            }
-        } else {
-            var startIdx = Math.max(0, lines.length - newCount);
-            for (var j = startIdx; j < lines.length; j++) {
-                var div2 = document.createElement('div');
-                div2.className = 'log-line new-line';
-                var lvl2 = getLogLevel(lines[j]);
-                if (lvl2) div2.classList.add('lvl-' + lvl2);
-                div2.textContent = lines[j];
-                fragment.appendChild(div2);
-            }
-        }
-        logBody.appendChild(fragment);
-
-        while (logBody.children.length > 500) {
-            logBody.removeChild(logBody.firstChild);
-        }
-
-        if (logAutoScroll) scrollLogToBottom();
-    }
-
-    function fetchLogs() {
-        fetch('/api/logs?n=200')
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                var newLines = data.lines;
-                var newCount = newLines.length - logLines.length;
-
-                if (newLines.length !== logLines.length ||
-                    (newLines.length > 0 && newLines[newLines.length-1] !== logLines[logLines.length-1])) {
-                    var actualNew = newCount > 0 ? newCount : newLines.length;
-                    logLines = newLines;
-                    if (actualNew === newLines.length) {
-                        renderLogs(logLines);
-                    } else {
-                        renderLogs(logLines, actualNew);
-                    }
-                }
-                knownLogCount = data.total;
-            })
-            .catch(function() {});
-    }
-
-    setInterval(function() {
-        if (logOpen) fetchLogs();
-    }, 2000);
-
-    fetchLogs();
-</script>
-</body>
-</html>
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% endblock %}
